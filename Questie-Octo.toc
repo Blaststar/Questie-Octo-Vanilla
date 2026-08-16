@@ -1,0 +1,61 @@
+## Interface: 11200
+## Title: Questie-Octo
+## Notes: Quest helper.
+## Author: Questie-Octo
+## Version: 1.0.58
+## SavedVariables: QuestieOctoGlobalDB
+## SavedVariablesPerCharacter: QuestieOctoDB
+
+QuestieOcto.lua
+Core\Scheduler.lua
+API\ClassicAPI.lua
+
+Data\init\data.xml
+Data\init\enUS.xml
+Data\init\data-turtle.xml
+Data\init\enUS-turtle.xml
+Data\pfDB\overwrites-octo.lua
+Data\PvPQuestTypes.lua
+Data\pfDB\enrichment.lua
+Data\EventSchedule.lua
+Data\CalendarEventRules.lua
+Data\QuestRewards.lua
+
+Database\LegacyPFDB.lua
+Database\Database.lua
+Database\QuestModel.lua
+Quest\QuestLog.lua
+Tracker\TrackerDriver.lua
+Tracker\TrackerFrame.lua
+UI\QuestLogEnhancements.lua
+Quest\Completion.lua
+Quest\EventAvailability.lua
+Quest\AvailableQuests.lua
+Quest\Objectives.lua
+Quest\ItemStarts.lua
+Map\Nodes.lua
+Map\Clustering.lua
+Map\ItemStartAreas.lua
+Map\CandidateIndex.lua
+Map\ZoneBootstrap.lua
+Map\Prepared.lua
+Map\Tooltips.lua
+Map\Visuals.lua
+Map\ContinentProjection.lua
+Map\Map.lua
+Map\MinimapSettings.lua
+Map\Minimap.lua
+Libs\LibStub\LibStub.lua
+Libs\CallbackHandler-1.0\CallbackHandler-1.0.xml
+Libs\AceCore-3.0\AceCore-3.0.xml
+Libs\AceGUI-3.0\AceGUI-3.0.xml
+Libs\AceGUI-3.0\widgets\widgets.xml
+Libs\AceConfigRegistry-3.0\AceConfigRegistry-3.0.xml
+Libs\AceConfigDialog-3.0\AceConfigDialog-3.0.xml
+UI\QuestResearch.lua
+UI\QuestLinkTooltip.lua
+UI\Options.lua
+UI\GameMenu.lua
+Core\Bootstrap.lua
+Quest\CreatureDiagnostics.lua
+Commands.lua

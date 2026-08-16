@@ -1,0 +1,11 @@
+LibStub public-domain notice
+============================
+
+The bundled LibStub source contains the following upstream notice:
+
+"LibStub is hereby placed in the Public Domain"
+
+Credits recorded in the bundled source:
+Kaelten, Cladhaire, ckknight, Mikk, Ammo, Nevcairiel, joshborke.
+
+The notice is also retained directly in Libs/LibStub/LibStub.lua.

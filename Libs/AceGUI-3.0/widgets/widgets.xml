@@ -1,0 +1,14 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+    <Script file="AceGUIContainer-Frame.lua"/>
+    <Script file="AceGUIContainer-InlineGroup.lua"/>
+    <Script file="AceGUIContainer-ScrollFrame.lua"/>
+    <Script file="AceGUIContainer-SimpleGroup.lua"/>
+    <Script file="AceGUIContainer-TabGroup.lua"/>
+    <Script file="AceGUIWidget-Button.lua"/>
+    <Script file="AceGUIWidget-CheckBox.lua"/>
+    <Script file="AceGUIWidget-DropDown.lua"/>
+    <Script file="AceGUIWidget-DropDown-Items.lua"/>
+    <Script file="AceGUIWidget-Heading.lua"/>
+    <Script file="AceGUIWidget-Label.lua"/>
+    <Script file="AceGUIWidget-Slider.lua"/>
+</Ui>

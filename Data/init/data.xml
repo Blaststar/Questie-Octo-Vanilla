@@ -1,0 +1,13 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+  <Include file="..\pfDB\init.lua"/>
+  <Include file="..\pfDB\items.lua"/>
+  <Include file="..\pfDB\units.lua"/>
+  <Include file="..\pfDB\objects.lua"/>
+  <Include file="..\pfDB\refloot.lua"/>
+  <Include file="..\pfDB\quests-itemreq.lua"/>
+  <Include file="..\pfDB\quests.lua"/>
+  <Include file="..\pfDB\zones.lua"/>
+  <Include file="..\pfDB\minimap.lua"/>
+  <Include file="..\pfDB\areatrigger.lua"/>
+  <Include file="..\pfDB\meta.lua"/>
+</Ui>

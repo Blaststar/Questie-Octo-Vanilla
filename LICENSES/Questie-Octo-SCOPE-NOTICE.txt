@@ -1,0 +1,34 @@
+Questie-Octo Licensing Notice
+=============================
+
+Questie-Octo is a mixed-source open-source project.
+
+Original Questie-Octo contributions
+------------------------------------
+Code, documentation, integration work, and other material first authored for
+Questie-Octo, to the extent that those portions are not copied from or derived
+from third-party material, are licensed under the MIT License.
+
+The full MIT text for those original contributions is in:
+
+    LICENSES/Questie-Octo-MIT.txt
+
+Third-party material
+--------------------
+This notice does not relicense third-party code, data, artwork, libraries, or
+other material. Third-party material remains under its own copyright and
+license terms. See THIRD_PARTY_NOTICES.md and the files in LICENSES/.
+
+In particular, the MIT grant for original Questie-Octo contributions must not
+be read as a claim that Questie-derived material, Ace3 material, pfQuest/Shagu
+material, ClassicAPI, or any other third-party material has been relicensed by
+Questie-Octo.
+
+Where the exact upstream project license could not be verified from the source
+snapshot used during development, the upstream rights are expressly retained
+and no additional permission is asserted here.
+
+This licensing layout is intentionally additive. Historical README sections,
+source comments, architecture notes, audit notes, generated-data headers, and
+AI-oriented maintenance notes are part of the project's provenance record and
+should be preserved when modifying or redistributing the project.
