@@ -90,7 +90,8 @@ function V:ApplyPin(pin,node,isMinimap,alpha)
 
   local r,g,b=1,1,1
   -- Quest pickup/turn-in presentation priority is PvP > Repeatable > Event >
-  -- Normal. PvP and repeatable use dedicated artwork and keep its native color.
+  -- Turtle low-level gray > Normal. Gray uses dedicated artwork like the other
+  -- quest-start variants; objective tinting never recolors pickup/turn-in icons.
   if (node.pvp or node.repeatable) and (node.role=="available" or node.role=="itemStart" or node.role=="turnin") then
     r,g,b=1,1,1
   elseif objective and colorEnabled then

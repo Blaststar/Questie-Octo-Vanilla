@@ -31,7 +31,7 @@ function P:GetCurrentDensitySignature()
 end
 
 local function ExactRole(role)
-  return role=="available" or role=="turnin" or role=="flightMaster"
+  return role=="available" or role=="turnin" or role=="objectiveArea" or role=="flightMaster"
       or role=="auctioneer" or role=="banker" or role=="mailbox"
       or role=="battlemaster" or role=="innkeeper" or role=="meetingStone"
       or role=="repair" or role=="spiritHealer" or role=="stableMaster" or role=="vendor"

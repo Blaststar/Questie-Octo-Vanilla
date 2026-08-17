@@ -42,23 +42,33 @@ local function ApplyObjectiveState(node,state)
   return node
 end
 
+local function ConditionalCreatureCoords(q,creatureID,role)
+  local marker=q and q.conditionalMapMarker or nil
+  if marker and tonumber(marker.creatureID)==tonumber(creatureID)
+     and (role=="available" or role=="turnin") then
+    return marker.coords
+  end
+  return nil
+end
+
 local function CreatureNode(questID,role,id,itemID,chance,objectiveState)
   local q=QuestieOcto.QuestModel:Get(questID)
   return ApplyObjectiveState({
-    questID=questID,role=role,event=IsPresentationEvent(q),eventID=q and q.eventID or nil,pvp=q and q.pvp or false,repeatable=q and q.repeatable or false,
+    questID=questID,role=role,event=IsPresentationEvent(q),eventID=q and q.eventID or nil,pvp=q and q.pvp or false,repeatable=q and q.presentationRepeatable or false,
     sourceKind="creature",sourceID=id,
     sourceName=QuestieOcto.DatabaseAPI:GetCreatureName(id),
     sourceRank=QuestieOcto.DatabaseAPI:GetCreatureRank(id),
     respawnSeconds=QuestieOcto.DatabaseAPI:GetCreatureRespawnSeconds(id),
     itemID=itemID,itemName=itemID and QuestieOcto.DatabaseAPI:GetItemName(itemID) or nil,
-    chance=chance,coords=QuestieOcto.DatabaseAPI:GetCreatureCoords(id)
+    chance=chance,coords=ConditionalCreatureCoords(q,id,role) or QuestieOcto.DatabaseAPI:GetCreatureCoords(id),
+    conditionalOffer=q and q.conditionalOffer or nil
   },objectiveState)
 end
 
 local function ObjectNode(questID,role,id,itemID,chance,objectiveState)
   local q=QuestieOcto.QuestModel:Get(questID)
   return ApplyObjectiveState({
-    questID=questID,role=role,event=IsPresentationEvent(q),eventID=q and q.eventID or nil,pvp=q and q.pvp or false,repeatable=q and q.repeatable or false,
+    questID=questID,role=role,event=IsPresentationEvent(q),eventID=q and q.eventID or nil,pvp=q and q.pvp or false,repeatable=q and q.presentationRepeatable or false,
     sourceKind="gameObject",sourceID=id,
     sourceName=QuestieOcto.DatabaseAPI:GetObjectName(id),
     itemID=itemID,itemName=itemID and QuestieOcto.DatabaseAPI:GetItemName(itemID) or nil,
@@ -116,7 +126,8 @@ end
 
 local function StarterTouchesMap(q,mapID)
   for _,id in pairs(q.starts.creature or {}) do
-    if CoordsContainMap(QuestieOcto.DatabaseAPI:GetCreatureCoords(id),mapID) then return true end
+    local coords=ConditionalCreatureCoords(q,id,"available") or QuestieOcto.DatabaseAPI:GetCreatureCoords(id)
+    if CoordsContainMap(coords,mapID) then return true end
   end
 
   for _,id in pairs(q.starts.gameObject or {}) do

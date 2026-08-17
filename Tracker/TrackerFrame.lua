@@ -399,6 +399,24 @@ local function WrapTextToWidth(fs,text,maxWidth)
   return table.concat(lines,"\n"),count
 end
 
+local function ZoneSpacerHeight(fontSize)
+  -- Keep zone groups visually separated without consuming a full text row.
+  -- The spacer scales with the configured tracker font and adds a small amount
+  -- for OUTLINE/THICKOUTLINE so heavier glyph edges do not feel crowded.
+  local height=(tonumber(fontSize) or 10)-4
+  if height<4 then height=4 end
+  if height>13 then height=13 end
+
+  if Settings():Get("trackerThickOutlineText") then
+    height=height+2
+  elseif Settings():Get("trackerOutlineText") then
+    height=height+1
+  end
+
+  if height>15 then height=15 end
+  return height
+end
+
 local function ApplyRowStyle(row, contentWidth, constrainWidth)
   local size=tonumber(Settings():Get("trackerFontSize")) or 10
   local left=0
@@ -407,7 +425,7 @@ local function ApplyRowStyle(row, contentWidth, constrainWidth)
 
   if kind=="zone" then
     size=size+1
-    r,g,b=1,0.82,0
+    r,g,b=0.88,0.69,0.24
     left=0
   elseif kind=="quest" then
     -- Match the classic Questie/Quest Log presentation: completion is shown
@@ -464,7 +482,12 @@ local function ApplyRowStyle(row, contentWidth, constrainWidth)
   row.textIndent=left
 
   local baseHeight=size+4
-  local height=baseHeight*math.max(1,lineCount)
+  local height
+  if kind=="spacer" then
+    height=ZoneSpacerHeight(size)
+  else
+    height=baseHeight*math.max(1,lineCount)
+  end
   row:SetHeight(height)
 end
 
@@ -563,12 +586,20 @@ function T:UpdateTimerRows()
 end
 
 local function ObjectiveDisplayText(objective)
-  local text=objective and (objective.rawText or objective.text) or ""
+  -- Turtle can return leaderboard text without its entity name prefer the DB-localized text 
+  local raw=objective and objective.rawText or nil
+  local loc=objective and objective.text or nil
+  local text
+  if raw and string.find(raw,"%a") then
+    text=raw
+  elseif loc and string.find(loc,"%a") then
+    text=loc
+  else
+    text=raw or loc or ""
+  end
   if not text then text="" end
 
-  -- The native Vanilla leaderboard text already contains the desired 5/10 form.
   -- Only synthesize amounts when the compatibility API supplied numeric progress
-  -- separately and the text itself omitted it. Never display percentages.
   local current=objective and tonumber(objective.current)
   local required=objective and tonumber(objective.required)
   if current and required and required>0 and not string.find(text,"%d+%s*/%s*%d+") then
@@ -628,7 +659,9 @@ function T:Render()
 
     local prefix=""
     if quest.level and tonumber(quest.level) and tonumber(quest.level)>0 then
-      prefix="["..tostring(quest.level).."] "
+      -- Match pfQuest's Vanilla tracker convention: the native quest-log tag
+      -- adds a '+' inside the level brackets, e.g. [40+].
+      prefix="["..tostring(quest.level)..(quest.tag and "+" or "").."] "
     end
     local title=tostring(quest.title or "Quest")
     if quest.failed then
@@ -768,7 +801,7 @@ function T:InstallNativeTimerSuppression()
   if type(QuestTimerFrame_Update)=="function" then
     local secureHook=hooksecurefunc
     if type(secureHook)~="function" and LibStub then
-      local aceCore=LibStub("AceCore-3.0",true)
+      local aceCore=LibStub("QuestieOcto_AceCore-3.0",true)
       secureHook=aceCore and aceCore.hooksecurefunc
     end
 

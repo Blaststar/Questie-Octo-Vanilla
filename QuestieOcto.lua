@@ -2,7 +2,7 @@
 QuestieOcto = QuestieOcto or {}
 local QO = QuestieOcto
 
-QO.version = "1.0.58"
+QO.version = "1.0.79"
 QO.enabled = false
 QO.ready = false
 QO.messages = {}
@@ -24,42 +24,23 @@ local function RGBFromDifficultyFunction(level)
   return nil,nil,nil
 end
 
-local function SameRGB(r,g,b,color)
-  if not color then return false end
-  local cr,cg,cb=tonumber(color.r),tonumber(color.g),tonumber(color.b)
-  if not r or not g or not b or not cr or not cg or not cb then return false end
-  return math.abs(r-cr)<0.01 and math.abs(g-cg)<0.01 and math.abs(b-cb)<0.01
-end
-
 function QO:GetNativeQuestDifficultyColor(level,questID)
-  -- First authority: the actual color Turtle's native QuestLog_Update stored on
-  -- this quest's Blizzard title button. QuestLogEnhancements caches that value
-  -- before it changes the displayed text. This remains independent of skins.
+  -- First authority: the actual color Turtle's native QuestLog_Update
   local qle=self.QuestLogEnhancements
   if qle and qle.GetCachedQuestColor and questID then
     local r,g,b=qle:GetCachedQuestColor(questID)
     if r then return r,g,b end
   end
 
+  -- Fallback until the native Quest Log color has been observed and cached
   local r,g,b=RGBFromDifficultyFunction(level)
   if not r then return nil,nil,nil end
-
-  -- Turtle/Octo keeps quests in the easy/green presentation instead of letting
-  -- the stock trivial band turn gray. ClassicAPI can expose stock 1.12's
-  -- GetDifficultyColor(), so normalize only that one band as a fallback until
-  -- the native Quest Log color for this quest has been observed and cached.
-  if QuestDifficultyColor and SameRGB(r,g,b,QuestDifficultyColor["trivial"]) then
-    local standard=QuestDifficultyColor["standard"]
-    if standard and standard.r then
-      return tonumber(standard.r),tonumber(standard.g),tonumber(standard.b)
-    end
-  end
   return r,g,b
 end
 
 function QO:Print(text)
   if DEFAULT_CHAT_FRAME then
-    DEFAULT_CHAT_FRAME:AddMessage("|cff33ffccQuestie-Octo|r: "..tostring(text))
+    DEFAULT_CHAT_FRAME:AddMessage("|cffffd700Questie-Octo|r: "..tostring(text))
   end
 end
 

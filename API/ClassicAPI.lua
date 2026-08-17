@@ -42,6 +42,9 @@ function A:Validate()
     queryQuestsCompleted = type(QueryQuestsCompleted)=="function",
     questFlaggedCompleted = type(IsQuestFlaggedCompleted)=="function" or Has(C_QuestLog,"IsQuestFlaggedCompleted"),
     mapWorldSize = Has(C_Map,"GetMapWorldSize"),
+    instanceInfo = type(GetInstanceInfo)=="function",
+    leaderboardObjectiveID = type(GetQuestLogLeaderBoardID)=="function",
+    areaTriggerInfo = Has(C_Map,"GetAreaTriggerInfo"),
   }
 
   return self.valid
@@ -109,6 +112,51 @@ function A:GetBestMapForPlayer()
   return C_Map.GetBestMapForUnit("player")
 end
 
+-- ClassicAPI backports the modern GetInstanceInfo() tuple to Vanilla 1.12.
+-- Keep instance classification behind the API contract instead of teaching
+-- presentation modules about DLL/global availability details.
+function A:GetInstanceType()
+  if type(GetInstanceInfo)~="function" then return "none" end
+  local ok,name,instanceType=pcall(GetInstanceInfo)
+  if not ok or type(instanceType)~="string" then return "none" end
+  return instanceType
+end
+
+function A:IsInDungeonOrRaid()
+  local instanceType=self:GetInstanceType()
+  return instanceType=="party" or instanceType=="raid"
+end
+
+-- pfQuest-classicAPI resolves quest-bound exploration objectives directly from
+-- ClassicAPI's AreaTrigger.dbc bridge. Keep this behind the API contract so
+-- generic map code never needs to know whether the DLL/global exists.
+function A:GetAreaTriggerInfo(areaTriggerID)
+  areaTriggerID=tonumber(areaTriggerID)
+  if not areaTriggerID or not C_Map or type(C_Map.GetAreaTriggerInfo)~="function" then return nil end
+
+  local ok,info=pcall(C_Map.GetAreaTriggerInfo,areaTriggerID)
+  if not ok or type(info)~="table" then return nil end
+
+  local mapID=tonumber(info.areaID)
+  local x=tonumber(info.mapX)
+  local y=tonumber(info.mapY)
+  if not mapID or not x or not y then return nil end
+
+  return {
+    id=areaTriggerID,
+    areaID=mapID,
+    mapX=x,
+    mapY=y
+  }
+end
+
+
+function A:GetQuestLogLeaderBoardID(objectiveIndex,questLogIndex)
+  if type(GetQuestLogLeaderBoardID)~="function" then return nil end
+  local ok,id=pcall(GetQuestLogLeaderBoardID,objectiveIndex,questLogIndex)
+  if not ok then return nil end
+  return tonumber(id)
+end
 
 function A:GetQuestObjectives(questID,questLogIndex)
   if C_QuestLog and type(C_QuestLog.GetQuestObjectives)=="function" then

@@ -1,7 +1,7 @@
 --[[ $Id: AceGUIWidget-DropDown.lua 1116 2014-10-12 08:15:46Z nevcairiel $ ]]--
-local AceGUI = LibStub("AceGUI-3.0")
+local AceGUI = LibStub("QuestieOcto_AceGUI-3.0")
 
-local AceCore = LibStub("AceCore-3.0")
+local AceCore = LibStub("QuestieOcto_AceCore-3.0")
 
 -- Lua APIs
 local min, max, floor = math.min, math.max, math.floor

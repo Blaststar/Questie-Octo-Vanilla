@@ -2,10 +2,10 @@
 Frame Container
 -------------------------------------------------------------------------------]]
 local Type, Version = "Frame", 24
-local AceGUI = LibStub and LibStub("AceGUI-3.0", true)
+local AceGUI = LibStub and LibStub("QuestieOcto_AceGUI-3.0", true)
 if not AceGUI or (AceGUI:GetWidgetVersion(Type) or 0) >= Version then return end
 
-local AceCore = LibStub("AceCore-3.0")
+local AceCore = LibStub("QuestieOcto_AceCore-3.0")
 local wipe = AceCore.wipe
 
 -- Lua APIs

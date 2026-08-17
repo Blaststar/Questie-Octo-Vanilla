@@ -13,10 +13,22 @@ end
 local function RespawnText(seconds)
   seconds=tonumber(seconds)
   if not seconds or seconds<=0 then return "unknown" end
-  if math.mod(seconds,60)==0 then
-    return "~"..tostring(math.floor(seconds/60)).." min"
+  seconds=math.floor(seconds)
+
+  if seconds<60 then return "~"..tostring(seconds).."s" end
+
+  local minutes=math.floor(seconds/60)
+  -- Roll long respawns up into hours so 18000s reads "~5h", not "~300 min".
+  if minutes>=60 then
+    local hours=math.floor(minutes/60)
+    local mins=math.mod(minutes,60)
+    if mins==0 then return "~"..tostring(hours).."h" end
+    return "~"..tostring(hours).."h "..tostring(mins).."m"
   end
-  return "~"..tostring(math.floor(seconds/60)).."m "..tostring(math.mod(seconds,60)).."s"
+
+  local secs=math.mod(seconds,60)
+  if secs==0 then return "~"..tostring(minutes).." min" end
+  return "~"..tostring(minutes).."m "..tostring(secs).."s"
 end
 
 local function ArrayContains(t,value)

@@ -37,11 +37,19 @@ local function IndexCoords(coords,questID)
   end
 end
 
+local function StarterCreatureCoords(q,creatureID)
+  local marker=q and q.conditionalMapMarker or nil
+  if marker and tonumber(marker.creatureID)==tonumber(creatureID) then
+    return marker.coords
+  end
+  return QuestieOcto.DatabaseAPI:GetCreatureCoords(creatureID)
+end
+
 local function IndexQuest(q)
   if not q then return end
 
   for _,id in pairs(q.starts.creature or {}) do
-    IndexCoords(QuestieOcto.DatabaseAPI:GetCreatureCoords(id),q.id)
+    IndexCoords(StarterCreatureCoords(q,id),q.id)
   end
 
   for _,id in pairs(q.starts.gameObject or {}) do

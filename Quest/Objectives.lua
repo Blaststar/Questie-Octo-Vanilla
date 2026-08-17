@@ -7,7 +7,7 @@ O.running=false
 O.pending=false
 O.generation=0
 O.stats={
-  quests=0, creature=0, object=0, item=0, itemSources=0, irTargets=0,
+  quests=0, creature=0, object=0, item=0, areaTrigger=0, itemSources=0, irTargets=0,
   mapped=0, unmapped=0, direct=0, fallback=0, fuzzy=0, single=0, typeMismatch=0,
   rebuilds=0, dependencyWaits=0
 }
@@ -18,7 +18,7 @@ local function ResetStats()
   local rebuilds=O.stats.rebuilds or 0
   local waits=O.stats.dependencyWaits or 0
   O.stats={
-    quests=0, creature=0, object=0, item=0, itemSources=0, irTargets=0,
+    quests=0, creature=0, object=0, item=0, areaTrigger=0, itemSources=0, irTargets=0,
     mapped=0, unmapped=0, direct=0, fallback=0, fuzzy=0, single=0, typeMismatch=0,
     rebuilds=rebuilds, dependencyWaits=waits
   }
@@ -213,6 +213,25 @@ local function NormalizeLogType(typ)
   return typ
 end
 
+-- Sparse presentation-only corrections for capture/transform objectives where
+-- the server awards quest credit against a temporary NPC entry that has no
+-- natural spawn points. Keep the authoritative live objective ID for progress
+-- and completion; only map/minimap guidance uses the actionable source NPC.
+--
+-- Plagued Lands (2118): Tortoise darkshore.cpp handles spell 9439 by changing
+-- Rabid Thistle Bear (2164) into Captured Rabid Thistle Bear (11836), then
+-- awards KilledMonsterCredit for 11836. The player must therefore find 2164,
+-- while 11836 remains the correct completion target in the quest log/database.
+local CREATURE_OBJECTIVE_SOURCE_OVERRIDES={
+  [2118]={ [11836]=2164 },
+}
+
+local function PresentationCreatureSourceID(questID,objectiveID)
+  local byQuest=CREATURE_OBJECTIVE_SOURCE_OVERRIDES[tonumber(questID)]
+  local sourceID=byQuest and byQuest[tonumber(objectiveID)]
+  return tonumber(sourceID) or tonumber(objectiveID)
+end
+
 local function Levenshtein(str1,str2)
   str1=string.lower(tostring(str1 or ""))
   str2=string.lower(tostring(str2 or ""))
@@ -236,6 +255,7 @@ end
 
 local function MergeState(entry,row)
   entry.objectiveIndex=row.index
+  entry.objectiveID=row.objectiveID
   entry.objectiveText=row.text
   entry.rawObjectiveText=row.rawText or row.text
   entry.objectiveType=row.type
@@ -253,20 +273,31 @@ local function ObjectiveTypesMatch(logType,dbType)
   return false
 end
 
-local function EntryFromOrderedObjective(q,row)
-  local ordered=q.objectiveData
-  -- row.dataIndex is the objectiveData index bound by name in QuestLog's
-  -- LocalizeObjectiveRows. row.index is only the server leaderboard position,
-  -- which does not necessarily line up with pfQuest's objectiveData ordering,
-  -- so prefer the name-resolved index and fall back to position only when the
-  -- row was never localized (e.g. database not ready at snapshot time).
-  local index=tonumber(row.dataIndex) or tonumber(row.index)
-  if not ordered or not index then return nil end
-  local entry=ordered[index]
-  if not entry then return nil end
-  if ObjectiveTypesMatch(row.type,entry.type) then return entry end
-  O.stats.typeMismatch=O.stats.typeMismatch+1
-  return nil
+local function EntryFromLiveObjectiveID(q,row)
+  local id=tonumber(row and row.objectiveID)
+  if not q or not id then return nil end
+  local typ=string.lower(tostring(row.type or ""))
+  local creatureMatch=nil
+  local objectMatch=nil
+  local itemMatch=nil
+
+  for i=1,table.getn(q.objectiveData or {}) do
+    local entry=q.objectiveData[i]
+    if entry and tonumber(entry.id)==id then
+      if entry.kind=="creature" then creatureMatch=entry
+      elseif entry.kind=="gameObject" then objectMatch=entry
+      elseif entry.kind=="item" then itemMatch=entry end
+    end
+  end
+
+  if typ=="item" then return itemMatch end
+  if typ=="object" or typ=="gameobject" then return objectMatch end
+  if typ=="monster" or typ=="creature" or typ=="kill" then
+    -- pfQuest notes that Vanilla can return "monster" for some object-style
+    -- objectives; let the live ClassicAPI ID disambiguate the namespace.
+    return creatureMatch or objectMatch
+  end
+  return creatureMatch or objectMatch or itemMatch
 end
 
 local function CandidateName(kind,id)
@@ -314,7 +345,7 @@ function O:ResolveQuest(questID)
   if not q then return nil end
 
   local state=QuestieOcto.QuestLog.active[questID]
-  local result={questID=questID,creature={},gameObject={},item={}}
+  local result={questID=questID,creature={},gameObject={},item={},areaTrigger={}}
 
   -- Failed quests retain their tracker state but have no active objective map
   -- guidance until the server permits a retry.
@@ -324,15 +355,21 @@ function O:ResolveQuest(questID)
   local irTargets,skipCreature,skipObject=BuildIRTargets(q)
 
   for _,row in pairs(state and state.objectives or {}) do
-    local ordered=EntryFromOrderedObjective(q,row)
+    local direct=EntryFromLiveObjectiveID(q,row)
     local kind=nil
     local id=nil
 
-    if ordered then
-      kind=ordered.kind
-      id=ordered.id
+    if direct then
+      -- pfQuest-style primary path: use ClassicAPI's live leaderboard entity
+      -- ID so server objective ordering cannot attach one boss's progress to
+      -- another boss's map node.
+      kind=direct.kind
+      id=direct.id
       O.stats.direct=O.stats.direct+1
     else
+      -- Questie 5/6-style fallback: when no trustworthy live ID is available,
+      -- match the native objective text against same-type DB candidates rather
+      -- than assuming objective array positions are identical.
       kind=NormalizeLogType(row.type)
       id=BestSameTypeCandidate(q,kind,row,used)
       if id then O.stats.fallback=O.stats.fallback+1 end
@@ -345,7 +382,11 @@ function O:ResolveQuest(questID)
         O.stats.mapped=O.stats.mapped+1
 
         if kind=="creature" and not skipCreature[id] then
-          table.insert(result.creature,MergeState({kind="creature",id=id},row))
+          local sourceID=PresentationCreatureSourceID(questID,id)
+          table.insert(result.creature,MergeState({
+            kind="creature",id=sourceID,objectiveTargetID=id,
+            sourceOverride=(sourceID~=id) and true or nil
+          },row))
           O.stats.creature=O.stats.creature+1
         elseif kind=="gameObject" and not skipObject[id] then
           table.insert(result.gameObject,MergeState({kind="gameObject",id=id},row))
@@ -381,6 +422,27 @@ function O:ResolveQuest(questID)
         })
         O.stats.item=O.stats.item+1
       end
+    end
+  end
+
+  -- Quest-bound area triggers are not generic exploration/fog helpers. pfQuest
+  -- resolves obj["A"] through ClassicAPI and shows those points while the quest
+  -- is active. Keep them separate from ordinary leaderboard entity matching:
+  -- Vanilla does not provide a reliable creature/object-style namespace for
+  -- these event triggers, and pfQuest likewise keeps them until the quest as a
+  -- whole is complete.
+  for _,areaTriggerID in pairs(q.objectives.areaTrigger or {}) do
+    local info=QuestieOcto.API and QuestieOcto.API.GetAreaTriggerInfo
+      and QuestieOcto.API:GetAreaTriggerInfo(areaTriggerID) or nil
+    if info then
+      table.insert(result.areaTrigger,{
+        kind="areaTrigger",
+        id=tonumber(areaTriggerID),
+        mapID=info.areaID,
+        x=info.mapX,
+        y=info.mapY
+      })
+      O.stats.areaTrigger=(O.stats.areaTrigger or 0)+1
     end
   end
 

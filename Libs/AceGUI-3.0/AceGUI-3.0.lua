@@ -8,7 +8,7 @@
 -- to misbehave. If you think some part of a widget should be modifiable, please open a ticket, and we"ll
 -- implement a proper API to modify it.
 -- @usage
--- local AceGUI = LibStub("AceGUI-3.0")
+-- local AceGUI = LibStub("QuestieOcto_AceGUI-3.0")
 -- -- Create a container frame
 -- local f = AceGUI:Create("Frame")
 -- f:SetCallback("OnClose",function(widget) AceGUI:Release(widget) end)
@@ -25,12 +25,12 @@
 -- @class file
 -- @name AceGUI-3.0
 -- @release $Id: AceGUI-3.0.lua 1102 2013-10-25 14:15:23Z nevcairiel $
-local ACEGUI_MAJOR, ACEGUI_MINOR = "AceGUI-3.0", 34
+local ACEGUI_MAJOR, ACEGUI_MINOR = "QuestieOcto_AceGUI-3.0", 34
 local AceGUI, oldminor = LibStub:NewLibrary(ACEGUI_MAJOR, ACEGUI_MINOR)
 
 if not AceGUI then return end -- No upgrade needed
 
-local AceCore = LibStub("AceCore-3.0")
+local AceCore = LibStub("QuestieOcto_AceCore-3.0")
 local hooksecurefunc = AceCore.hooksecurefunc
 local safecall = AceCore.safecall
 

@@ -56,6 +56,27 @@ C.zones={
   [1637]={continent=1,name="Ogrimmar",xMin=1338.460571,yMin=-5083.205566,xMax=2273.877197,yMax=-3680.601074},
   [1638]={continent=1,name="ThunderBluff",xMin=-1545.833252,yMin=-527.083313,xMax=-849.999939,yMax=516.666626},
   [1657]={continent=1,name="Darnassis",xMin=9532.586914,yMin=1880.029541,xMax=10238.31641,yMax=2938.362793},
+
+  -- Turtle custom world zones reported missing from continent/world overview.
+  -- Bounds come from the supplied pfQuest WorldMapArea_turtle extractor data,
+  -- using the same coordinate convention as the Vanilla entries above.
+  [408]={continent=0,name="Gillijim",xMin=-14575.719727,yMin=1344.119995,xMax=-12528.709961,yMax=4436.220215},
+  [409]={continent=0,name="Lapidis",xMin=-12959.419922,yMin=2031.880005,xMax=-11043.480469,yMax=4933.330078},
+  [616]={continent=1,name="Hyjal",xMin=3983,yMin=-4286,xMax=6125,yMax=-1080},
+  [2040]={continent=0,name="AlahThalas",xMin=3931,yMin=-3637,xMax=4907,yMax=-2169},
+  [4012]={continent=0,name="ScarletEnclave",xMin=979,yMin=-7209,xMax=3087,yMax=-4050},
+  [5121]={continent=1,name="TelAbim",xMin=-9371,yMin=-8406,xMax=-7184,yMax=-5179},
+  [5179]={continent=0,name="Gilneas",xMin=-2801,yMin=-413,xMax=-359,yMax=3253},
+  [5225]={continent=0,name="ThalassianHighlands",xMin=2891,yMin=-4087,xMax=4952,yMax=-1005},
+  [5536]={continent=1,name="BlackstoneIsland",xMin=-866,yMin=-8746,xMax=799,yMax=-6274},
+  [5561]={continent=0,name="Balor",xMin=-9645,yMin=1630,xMax=-7577,yMax=4728},
+  [5581]={continent=0,name="Northwind",xMin=-8484,yMin=-983,xMax=-6327,yMax=2258},
+  [5602]={continent=0,name="GrimReaches",xMin=-6488,yMin=-7459,xMax=-2904,yMax=-2072},
+
+  -- Moonwhisper Coast post-dates the supplied WorldMapArea_turtle snapshot.
+  -- These bounds are reconstructed from the current Turtle server creature
+  -- world positions plus Questie-Octo's shipped 7856x5241 minimap world size.
+  [5642]={continent=1,name="MoonwhisperCoast",xMin=4963,yMin=-9210,xMax=10204,yMax=-1354},
 }
 
 function C:GetClientContinentMapID(clientContinentID)

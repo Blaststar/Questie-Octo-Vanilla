@@ -21,9 +21,6 @@ local INNER_R,INNER_G,INNER_B,INNER_A=0.035,0.035,0.035,0.84
 local INNER_BORDER_R,INNER_BORDER_G,INNER_BORDER_B,INNER_BORDER_A=0.20,0.20,0.20,0.95
 local TAB_R,TAB_G,TAB_B,TAB_A=0.28,0.28,0.28,1.0
 
--- Capture each frame/texture's original Blizzard color exactly once, before the
--- dark pass first mutates it. Unchecking Dark Theme then restores the precise
--- on-load appearance rather than guessing at Blizzard's default color values.
 -- 1.12 reports nil for a backdrop color/border that was never explicitly set
 -- (the AceGUI Frame shell never sets a border color, so its default is white).
 -- Fill nil with 1 so the value is restorable. `x or 1` is safe here because Lua
@@ -259,6 +256,9 @@ end
 function O:ApplyDarkTheme(apply)
   if not self.configFrame or not self.configFrame.frame then return end
 
+  -- No-argument callers (the initial open and AceConfig's post-refresh reapply)
+  -- must honor the saved setting, not force the theme on. Only the toggle's own
+  -- setter passes an explicit boolean.
   if apply == nil then
     apply=(QuestieOcto.MinimapSettings and QuestieOcto.MinimapSettings:Get("useDarkTheme")) and true or false
   end
@@ -267,7 +267,9 @@ function O:ApplyDarkTheme(apply)
   if apply then
     DarkenOuterShell(shell)
 
-    -- Apply the inner treatment only below the outer shell. Keeping the shell seperate
+    -- Apply the inner treatment only below the outer shell. Keeping the shell
+    -- separate is important because its DialogFrame textures need vertex tinting,
+    -- while AceConfig's content containers look better with dark backdrops.
     if shell.GetChildren then
       local children={shell:GetChildren()}
       for _,child in pairs(children) do
@@ -275,11 +277,13 @@ function O:ApplyDarkTheme(apply)
       end
     end
   else
-    -- Unchecked: return every frame/texture the dark pass touched to the exact blizzard color
+    -- Unchecked: return every frame/texture the dark pass touched to the exact
+    -- Blizzard color it had on load.
     RestoreDefaultTheme(shell)
   end
 
-  -- Run after backdrop darkening so the scrollbar is always the final/top UI layer
+  -- Run after backdrop darkening so the scrollbar is always the final/top UI
+  -- layer, including after AceConfig rebuilds the currently selected tab.
   RaiseScrollbar(shell)
 end
 
@@ -288,7 +292,7 @@ local function Settings()
 end
 
 local function ClearSavedConfigPosition()
-  local Dialog=LibStub and LibStub("AceConfigDialog-3.0",true)
+  local Dialog=LibStub and LibStub("QuestieOcto_AceConfigDialog-3.0",true)
   if not Dialog or not Dialog.GetStatusTable then return end
 
   local status=Dialog:GetStatusTable(APP_NAME)
@@ -350,32 +354,33 @@ local function CreateGeneralTab()
       }},
 
       quest_options={type="group",order=10,name="Quest Options",inline=true,args={
-        questLogShowLevels={type="toggle",order=1,name="Show Quest Levels",desc="Show quest levels in the Quest Log.",width="full",get=GetValue,set=SetValue},
-        showLowLevelQuests={type="toggle",order=2,name="Show Low-Level Quests",desc="Show quests below the normal green quest range.",get=GetValue,set=SetValue},
-        lowLevelQuestRange={type="range",order=2.1,name=function()
+        showQuestArrow={type="toggle",order=1,name="Show Quest Arrow",desc="Shows arrow that points towards nearest quest objective.",width="full",get=GetValue,set=SetValue},
+        questLogShowLevels={type="toggle",order=2,name="Show Quest Levels",desc="Show quest levels in the Quest Log.",width="full",get=GetValue,set=SetValue},
+        showLowLevelQuests={type="toggle",order=3,name="Show Low-Level Quests",desc="Show quests below the normal green quest range.",get=GetValue,set=SetValue},
+        lowLevelQuestRange={type="range",order=4,name=function()
           local value=tonumber(Settings():Get("lowLevelQuestRange")) or 35
           if value>=35 then return "Levels Below: All" end
           return "Levels Below: "..tostring(value)
         end,desc="Limit how many levels below you are shown. All removes the limit.",width="normal",min=5,max=35,step=5,arg={questieHideEditBox=true,questieMaxLabel="All",questieCommitOnMouseUp=true,questieLiveLabelPrefix="Levels Below: "},disabled=function() return not Settings():Get("showLowLevelQuests") end,get=GetValue,set=SetValue},
-        showRepeatableQuests={type="toggle",order=3,name="Show Repeatable Quests",desc="Show available repeatable quests.",width="full",get=GetValue,set=SetValue},
-        showEventQuests={type="toggle",order=4,name="Show Event Quests",desc="Show available event quests.",width="full",get=GetValue,set=SetValue},
-        showPvPRelatedQuests={type="toggle",order=5,name="Show PVP Related Quests",desc="Show PvP quest icons on the map and minimap.",width="full",get=GetValue,set=SetValue},
+        showRepeatableQuests={type="toggle",order=5,name="Show Repeatable Quests",desc="Show available repeatable quests.",width="full",get=GetValue,set=SetValue},
+        showEventQuests={type="toggle",order=6,name="Show Event Quests",desc="Show available event quests.",width="full",get=GetValue,set=SetValue},
+        showPvPRelatedQuests={type="toggle",order=7,name="Show PVP Related Quests",desc="Show PvP quest icons on the map and minimap.",width="full",get=GetValue,set=SetValue},
       }},
       reset_header={type="header",order=90,name="Questie Options"},
       enableDarkTheme={type="toggle",order=91,name="Enable Dark Theme",desc="Darken the configuration frame backdrops.",width="full",
-        get=function() 
-          return Settings():Get("useDarkTheme") 
+        get=function()
+          return Settings():Get("useDarkTheme")
         end,
-        set=function(_, value) 
+        set=function(_, value)
           Settings():Set("useDarkTheme", value)
-          O:ApplyDarkTheme(value) -- Passes true/false directly
+          O:ApplyDarkTheme(value)
         end
       },
       reset_text={type="description",order=92,name="Restore Questie-Octo options to their defaults. Quest data and completed-quest history are not deleted.",fontSize="medium"},
       resetOptions={type="execute",order=93,name="Reset Options",desc="Restore option defaults.",func=function()
         Settings():Reset()
         ClearSavedConfigPosition()
-        local Registry=LibStub and LibStub("AceConfigRegistry-3.0",true)
+        local Registry=LibStub and LibStub("QuestieOcto_AceConfigRegistry-3.0",true)
         if Registry and Registry.NotifyChange then Registry:NotifyChange(APP_NAME) end
       end},
     },
@@ -500,9 +505,9 @@ end
 function O:Initialize()
   if self.initialized then return true end
 
-  local AceGUI=LibStub and LibStub("AceGUI-3.0",true)
-  local Registry=LibStub and LibStub("AceConfigRegistry-3.0",true)
-  local Dialog=LibStub and LibStub("AceConfigDialog-3.0",true)
+  local AceGUI=LibStub and LibStub("QuestieOcto_AceGUI-3.0",true)
+  local Registry=LibStub and LibStub("QuestieOcto_AceConfigRegistry-3.0",true)
+  local Dialog=LibStub and LibStub("QuestieOcto_AceConfigDialog-3.0",true)
 
   self.stats.aceGUI=AceGUI and true or false
   self.stats.aceRegistry=Registry and true or false
@@ -609,7 +614,7 @@ end
 function O:Show()
   if not self:Initialize() then return end
 
-  local Dialog=LibStub("AceConfigDialog-3.0")
+  local Dialog=LibStub("QuestieOcto_AceConfigDialog-3.0")
   -- Questie 3.3.5 refreshes the existing standalone frame through Open().
   Dialog:Open(APP_NAME,self.configFrame)
   RecenterConfigFrame(self.configFrame)

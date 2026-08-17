@@ -1326,6 +1326,15 @@ do -- units/npcs
 
   -- Barltok Kettleburn (Dun Agrath)
   pfDB["units"]["data-turtle"][52068]["coords"] = { [1] = { 21, 71.4, 11, 120 } }
+
+  -- Hurl Cinderfist (Restless, 41640): his live world spawn at Rugford's
+  -- Mountain Rest falls inside both Turtle's expanded Dun Morogh map and the
+  -- overlapping Grim Reaches map. Keep both map representations so the quest
+  -- objective is visible from either local map without changing server truth.
+  pfDB["units"]["data-turtle"][62200]["coords"] = {
+    [1] = { 83.2, 70.8, 1, 300 },
+    [2] = { 4.1, 92, 5602, 300 },
+  }
 end
 
 do -- quests
@@ -1523,6 +1532,13 @@ do -- items
 end
 
 do -- quests
+  -- Onu is meditating (960): stale legacy pfDB quest-giver relation.
+  -- The supplied Turtle server data retains the quest template but has no live
+  -- creature/object/item quest-start relation for 960. Quest 961 is the actual
+  -- repeatable Onu helper quest and keeps its active-944 prerequisite. Remove
+  -- 960 from the merged runtime quest database without altering 961.
+  pfDB["quests"]["data-turtle"][960] = "_"
+
   -- Add "Dark Iron Gunpowder Keg" to objectives of "Vile Dwarven Pigs"
   -- The extractor scripts did not catch those, as the objetive is filled via a Gossip on use.
   pfDB["quests"]["data-turtle"][41682]["obj"]["O"] = { 2020173 }
@@ -1537,3 +1553,30 @@ end
 -- cost 166 silently dropped corrections before 1.0.2. patchtable.lua
 -- reports it.
 pfDB["octo-overwrites-complete"] = true
+
+do -- Cloth reputation donations: event 159 is a permanent content-release gate, not quest event membership.
+  -- Verified against the supplied Turtle server data and live server behavior in August 2026.
+  -- Keep every other quest field intact: faction/race restrictions, prerequisites, objectives,
+  -- levels and the repeatable classification of the "Additional Runecloth" follow-ups.
+  --
+  -- Silvermoon Remnants (80370-80374) and Revantusk Tribe (80375-80379) already ship
+  -- without event metadata, so only the legacy capital-city donation chains need correction.
+  local clothDonationQuestIDs = {
+    7791, 7792, 7793, 7794, 7795, 7796,
+    7798, 7799, 7800, 7801,
+    7802, 7803, 7804, 7805, 7806,
+    7807, 7808, 7809, 7811, 7812,
+    7813, 7814, 7817, 7818, 7819,
+    7820, 7821, 7822, 7823, 7824, 7825,
+    7826, 7827, 7831, 7832,
+    7833, 7834, 7835, 7836, 7837,
+  }
+
+  for _, questID in ipairs(clothDonationQuestIDs) do
+    local quest = pfDB["quests"]["data-turtle"][questID]
+    if type(quest) == "table" then
+      quest["event"] = nil
+    end
+  end
+end
+

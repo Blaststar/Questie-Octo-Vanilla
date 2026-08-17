@@ -300,9 +300,11 @@ function A:EvaluateQuest(questID,trackStats)
   end
 
   -- Some quests are conditionally exposed by scripted world interactions rather
-  -- than normal NPC availability. Do not advertise them as static pickups. If
-  -- the player actually accepts one, the Quest Log path still handles it.
-  if q.conditionalOffer then
+  -- than normal NPC availability. Most stay hidden as static pickups. A narrow
+  -- presentation exception may provide one representative discovery marker; in
+  -- that case continue through all ordinary level/race/filter gates and let the
+  -- node builders use only that representative coordinate.
+  if q.conditionalOffer and not q.conditionalMapMarker then
     return false,"conditional"
   end
 
@@ -387,6 +389,10 @@ function A:EvaluateQuest(questID,trackStats)
   if not HasStarter(q) then
     Track(self,"noStarter",trackStats)
     return false,"noStarter"
+  end
+
+  if q.conditionalOffer and q.conditionalMapMarker then
+    return true,"conditional"
   end
 
   return true,"available"

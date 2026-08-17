@@ -17,6 +17,7 @@ N.stats={
   objectiveCreature=0,
   objectiveObject=0,
   objectiveItemSource=0,
+  objectiveArea=0,
   turnin=0,
   flightMaster=0,
   auctioneer=0,
@@ -41,6 +42,7 @@ local function NewStats()
     objectiveCreature=0,
     objectiveObject=0,
     objectiveItemSource=0,
+    objectiveArea=0,
     turnin=0,
     flightMaster=0,
     auctioneer=0,
@@ -134,15 +136,25 @@ local function ApplyObjectiveState(node,state)
   return node
 end
 
+local function ConditionalCreatureCoords(q,creatureID,role)
+  local marker=q and q.conditionalMapMarker or nil
+  if marker and tonumber(marker.creatureID)==tonumber(creatureID)
+     and (role=="available" or role=="turnin") then
+    return marker.coords
+  end
+  return nil
+end
+
 local function AddCreatureNode(questID,role,creatureID,itemID,chance,objectiveState,vendor)
   local q=QuestieOcto.QuestModel:Get(questID)
   local node={
-    questID=questID,role=role,event=IsPresentationEvent(q),eventID=q and q.eventID or nil,pvp=q and q.pvp or false,repeatable=q and q.repeatable or false,sourceKind="creature",sourceID=creatureID,
+    questID=questID,role=role,event=IsPresentationEvent(q),eventID=q and q.eventID or nil,pvp=q and q.pvp or false,repeatable=q and q.presentationRepeatable or false,sourceKind="creature",sourceID=creatureID,
     sourceName=QuestieOcto.DatabaseAPI:GetCreatureName(creatureID),
     sourceRank=QuestieOcto.DatabaseAPI:GetCreatureRank(creatureID),
     respawnSeconds=QuestieOcto.DatabaseAPI:GetCreatureRespawnSeconds(creatureID),
     itemID=itemID,itemName=itemID and QuestieOcto.DatabaseAPI:GetItemName(itemID) or nil,
-    chance=chance,vendor=vendor and true or false,coords=QuestieOcto.DatabaseAPI:GetCreatureCoords(creatureID)
+    chance=chance,vendor=vendor and true or false,coords=ConditionalCreatureCoords(q,creatureID,role) or QuestieOcto.DatabaseAPI:GetCreatureCoords(creatureID),
+    conditionalOffer=q and q.conditionalOffer or nil
   }
   AddNode(ApplyObjectiveState(node,objectiveState))
 end
@@ -150,12 +162,22 @@ end
 local function AddObjectNode(questID,role,objectID,itemID,chance,objectiveState)
   local q=QuestieOcto.QuestModel:Get(questID)
   local node={
-    questID=questID,role=role,event=IsPresentationEvent(q),eventID=q and q.eventID or nil,pvp=q and q.pvp or false,repeatable=q and q.repeatable or false,sourceKind="gameObject",sourceID=objectID,
+    questID=questID,role=role,event=IsPresentationEvent(q),eventID=q and q.eventID or nil,pvp=q and q.pvp or false,repeatable=q and q.presentationRepeatable or false,sourceKind="gameObject",sourceID=objectID,
     sourceName=QuestieOcto.DatabaseAPI:GetObjectName(objectID),
     itemID=itemID,itemName=itemID and QuestieOcto.DatabaseAPI:GetItemName(itemID) or nil,
     chance=chance,coords=QuestieOcto.DatabaseAPI:GetObjectCoords(objectID)
   }
   AddNode(ApplyObjectiveState(node,objectiveState))
+end
+
+local function AddAreaTriggerNode(questID,source)
+  if not source or not source.mapID or not source.x or not source.y then return end
+  local q=QuestieOcto.QuestModel:Get(questID)
+  AddNode(ApplyObjectiveState({
+    questID=questID,role="objectiveArea",event=IsPresentationEvent(q),eventID=q and q.eventID or nil,pvp=q and q.pvp or false,repeatable=q and q.presentationRepeatable or false,
+    sourceKind="areaTrigger",sourceID=source.id,sourceName="Exploration Mark",
+    coords={{source.x,source.y,source.mapID}}
+  },source))
 end
 
 local function BuildAvailableQuestNodes(questID)
@@ -479,6 +501,12 @@ local function BuildActiveQuestNodes(questID)
       end
     end
   end
+  for _,src in pairs(resolved.areaTrigger or {}) do
+    if not src.complete then
+      AddAreaTriggerNode(questID,src)
+      CurrentStats().objectiveArea=(CurrentStats().objectiveArea or 0)+1
+    end
+  end
 end
 
 local function BuildActiveNodes()
@@ -496,6 +524,7 @@ local function StatKeyForNode(node)
   if node.role=="objectiveCreature" then return "objectiveCreature" end
   if node.role=="objectiveObject" then return "objectiveObject" end
   if node.role=="objectiveItemSource" then return "objectiveItemSource" end
+  if node.role=="objectiveArea" then return "objectiveArea" end
   if node.role=="turnin" then return "turnin" end
   if node.role=="flightMaster" then return "flightMaster" end
   if node.role=="auctioneer" then return "auctioneer" end

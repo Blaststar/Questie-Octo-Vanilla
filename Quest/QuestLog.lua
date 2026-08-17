@@ -29,6 +29,16 @@ local function ObjectiveProgressFallback(text)
   return tonumber(current),tonumber(required)
 end
 
+local function SortedNumericKeys(src)
+  local keys={}
+  if type(src)~="table" then return keys end
+  for k in pairs(src) do
+    if type(k)=="number" then table.insert(keys,k) end
+  end
+  table.sort(keys)
+  return keys
+end
+
 local function ReadObjectives(index,questID)
   local objectives={}
   local snapshot={}
@@ -42,7 +52,15 @@ local function ReadObjectives(index,questID)
     allDone=false
     local nonLogCount=0
 
-    for i,row in pairs(apiObjectives) do
+    -- ClassicAPI returns objectives indexed by their quest-log objective
+    -- number. Keep that numeric identity/order instead of relying on pairs(),
+    -- whose iteration order can differ between Lua tables/clients. The row's
+    -- text, progress and completion therefore stay attached to the same
+    -- objective while LocalizeObjectiveRows applies the compact DB ordinal.
+    local objectiveKeys=SortedNumericKeys(apiObjectives)
+    for keyIndex=1,table.getn(objectiveKeys) do
+      local i=objectiveKeys[keyIndex]
+      local row=apiObjectives[i]
       local typ=row.type
       local text=row.text
       local current=tonumber(row.numFulfilled)
@@ -53,6 +71,8 @@ local function ReadObjectives(index,questID)
         if required==nil then required=parsedRequired end
       end
       local finished=row.finished and true or false
+      local objectiveID=QuestieOcto.API and QuestieOcto.API.GetQuestLogLeaderBoardID
+        and QuestieOcto.API:GetQuestLogLeaderBoardID(i,index) or nil
 
       -- ClassicAPI/Turtle can publish the numerical counter before its separate
       -- `finished` boolean catches up. Treat a fulfilled numerical objective as
@@ -76,7 +96,8 @@ local function ReadObjectives(index,questID)
           current=current,
           required=required,
           numFulfilled=current,
-          numRequired=required
+          numRequired=required,
+          objectiveID=objectiveID
         })
         if not finished then allDone=false end
       end
@@ -86,6 +107,7 @@ local function ReadObjectives(index,questID)
       table.insert(snapshot,finished and "1" or "0")
       table.insert(snapshot,tostring(current or -1))
       table.insert(snapshot,tostring(required or -1))
+      table.insert(snapshot,tostring(objectiveID or 0))
 
       -- Map nodes only care whether an objective is still active. pfQuest's
       -- quest-state signature likewise records todo/done, not 3/10 -> 4/10.
@@ -95,6 +117,7 @@ local function ReadObjectives(index,questID)
         table.insert(mapSnapshot,tostring(i))
         table.insert(mapSnapshot,tostring(typ or ""))
         table.insert(mapSnapshot,finished and "1" or "0")
+        table.insert(mapSnapshot,tostring(objectiveID or 0))
       end
     end
 
@@ -111,6 +134,8 @@ local function ReadObjectives(index,questID)
     local text,typ,done=GetQuestLogLeaderBoard(i,index)
     local current,required=ObjectiveProgressFallback(text)
     local finished=done and true or false
+    local objectiveID=QuestieOcto.API and QuestieOcto.API.GetQuestLogLeaderBoardID
+      and QuestieOcto.API:GetQuestLogLeaderBoardID(i,index) or nil
 
     if current and required and required>0 and current>=required then
       finished=true
@@ -123,7 +148,8 @@ local function ReadObjectives(index,questID)
         index=i,text=text,rawText=text,type=typ,
         complete=finished,finished=finished,
         current=current,required=required,
-        numFulfilled=current,numRequired=required
+        numFulfilled=current,numRequired=required,
+        objectiveID=objectiveID
       })
       if not finished then allDone=false end
     end
@@ -133,11 +159,13 @@ local function ReadObjectives(index,questID)
     table.insert(snapshot,finished and "1" or "0")
     table.insert(snapshot,tostring(current or -1))
     table.insert(snapshot,tostring(required or -1))
+    table.insert(snapshot,tostring(objectiveID or 0))
 
     if typ~="log" then
       table.insert(mapSnapshot,tostring(i))
       table.insert(mapSnapshot,tostring(typ or ""))
       table.insert(mapSnapshot,finished and "1" or "0")
+      table.insert(mapSnapshot,tostring(objectiveID or 0))
     end
   end
 
@@ -145,48 +173,35 @@ local function ReadObjectives(index,questID)
 end
 
 
-local function ObjectiveDefName(def)
-  if not def or not def.id then return nil end
-  if def.kind=="creature" then return QuestieOcto.DatabaseAPI:GetCreatureName(def.id) end
-  if def.kind=="gameObject" then return QuestieOcto.DatabaseAPI:GetObjectName(def.id) end
-  if def.kind=="item" then return QuestieOcto.DatabaseAPI:GetItemName(def.id) end
-  return nil
+local function ContainsObjectiveID(list,id)
+  id=tonumber(id)
+  if not id then return false end
+  for i=1,table.getn(list or {}) do
+    if tonumber(list[i])==id then return true end
+  end
+  return false
 end
 
--- The live quest-log leaderboard is ordered by the server. pfQuest's compiled
--- objectiveData is ordered by DB category (creatures, then objects, then items)
--- and, within a category, by raw U/O/I array order. Those two orderings are NOT
--- guaranteed to agree. A leaderboard row must therefore be bound to its DB
--- objective definition by the entity NAME embedded in the native leaderboard
--- text, never by shared array position.
---
--- Positional binding attaches the wrong entity label to a row -- and because the
--- x/y counter comes from the leaderboard row while the name comes from the DB
--- definition, two same-type objectives whose orderings differ end up with their
--- counts swapped (Shaman 7/10 / Bonesnapper 2/10 instead of 2/10 / 7/10). The
--- Tracker escaped this because it renders rawText; tooltips render row.text
--- produced here, so they showed the swapped values.
-local function MatchDefIndexForRow(row,defs,used)
-  local nativeText=string.lower(tostring(row.rawText or row.text or ""))
-  if nativeText=="" then return nil end
+local function LiveObjectiveKind(q,row)
+  local id=tonumber(row and row.objectiveID)
+  if not q or not id then return nil end
+  local typ=string.lower(tostring(row.type or ""))
 
-  -- Longest matching name wins so "Stonesplinter Shaman Elder" is preferred over
-  -- "Stonesplinter Shaman" when both appear as substrings of the same row.
-  local bestIndex=nil
-  local bestLen=-1
-  for i=1,table.getn(defs) do
-    if not used[i] then
-      local name=ObjectiveDefName(defs[i])
-      if name and name~="" then
-        local lowerName=string.lower(name)
-        if string.find(nativeText,lowerName,1,true) then
-          local len=string.len(lowerName)
-          if len>bestLen then bestLen=len; bestIndex=i end
-        end
-      end
-    end
+  -- pfQuest uses ClassicAPI's GetQuestLogLeaderBoardID and then determines
+  -- whether the returned ID is a unit/object/item from the quest/database.
+  -- Vanilla can report some object interactions as "monster", so prefer the
+  -- native type but allow the live ID to disambiguate creature vs game object.
+  if typ=="item" and ContainsObjectiveID(q.objectives.item,id) then return "item" end
+  if (typ=="object" or typ=="gameobject") and ContainsObjectiveID(q.objectives.gameObject,id) then return "gameObject" end
+  if typ=="monster" or typ=="creature" or typ=="kill" then
+    if ContainsObjectiveID(q.objectives.creature,id) then return "creature" end
+    if ContainsObjectiveID(q.objectives.gameObject,id) then return "gameObject" end
   end
-  return bestIndex
+
+  if ContainsObjectiveID(q.objectives.creature,id) then return "creature" end
+  if ContainsObjectiveID(q.objectives.gameObject,id) then return "gameObject" end
+  if ContainsObjectiveID(q.objectives.item,id) then return "item" end
+  return nil
 end
 
 local function LocalizeObjectiveRows(questID,objectives)
@@ -194,52 +209,27 @@ local function LocalizeObjectiveRows(questID,objectives)
   if not QuestieOcto.DatabaseAPI or not QuestieOcto.DatabaseAPI:IsReady() then return objectives end
 
   local q=QuestieOcto.QuestModel and QuestieOcto.QuestModel:Get(questID) or nil
-  local defs=q and q.objectiveData or nil
-  if type(defs)~="table" then return objectives end
+  if not q then return objectives end
 
-  local used={}
-  local boundIndex={}
-
-  -- Pass 1: bind each row to the definition whose name appears in its native text.
   for i=1,table.getn(objectives) do
     local row=objectives[i]
-    if row then
-      local matched=MatchDefIndexForRow(row,defs,used)
-      if matched then
-        used[matched]=true
-        boundIndex[i]=matched
-        -- Objectives:ResolveQuest reads this to map map/hover nodes to the same
-        -- definition, so node.objectiveIndex stays consistent with row.text.
-        row.dataIndex=matched
-      end
-    end
-  end
+    local id=tonumber(row and row.objectiveID)
+    local kind=LiveObjectiveKind(q,row)
+    local name=nil
 
-  -- Pass 2: positional fallback for rows the name pass could not bind, using only
-  -- definitions no name match has already claimed. Preserves prior behavior on
-  -- data where the two orderings happened to agree.
-  for i=1,table.getn(objectives) do
-    if objectives[i] and not boundIndex[i] and defs[i] and not used[i] then
-      used[i]=true
-      boundIndex[i]=i
-      objectives[i].dataIndex=i
-    end
-  end
+    if id and kind=="creature" then name=QuestieOcto.DatabaseAPI:GetCreatureName(id)
+    elseif id and kind=="gameObject" then name=QuestieOcto.DatabaseAPI:GetObjectName(id)
+    elseif id and kind=="item" then name=QuestieOcto.DatabaseAPI:GetItemName(id) end
 
-  -- Pass 3: apply the localized label from the bound definition. Preserve live
-  -- progress/completion from the quest log; replace only the entity name. Rows
-  -- with no bound definition keep Turtle's native text as the final fallback.
-  for i=1,table.getn(objectives) do
-    local row=objectives[i]
-    local def=row and boundIndex[i] and defs[boundIndex[i]] or nil
-    if row and def and def.id then
-      local name=ObjectiveDefName(def)
-      if name and name~="" then
-        if row.current~=nil and row.required~=nil then
-          row.text=name..": "..tostring(row.current).."/"..tostring(row.required)
-        else
-          row.text=name
-        end
+    -- Never localize by objective array position. Questie 5/6 only assumes
+    -- positional identity when both sides contain one objective; pfQuest uses
+    -- ClassicAPI's live leaderboard ID. If no trustworthy ID is available,
+    -- keep Turtle's native objective text intact for the fallback matcher.
+    if row and name and name~="" then
+      if row.current~=nil and row.required~=nil then
+        row.text=name..": "..tostring(row.current).."/"..tostring(row.required)
+      else
+        row.text=name
       end
     end
   end
@@ -409,6 +399,7 @@ function QL:Refresh(fastRefresh)
       local info=QuestieOcto.API:GetQuestLogInfo(index)
       local title=info and info.title
       local level=info and info.level
+      local tag=info and info.tag
       local isHeader=info and info.isHeader
       local isComplete=info and info.isComplete
       if title and isHeader then
@@ -493,6 +484,7 @@ function QL:Refresh(fastRefresh)
         table.insert(snapshotParts,tostring(questID or 0))
         table.insert(snapshotParts,title)
         table.insert(snapshotParts,tostring(level or 0))
+        table.insert(snapshotParts,tostring(tag or ""))
         table.insert(snapshotParts,tostring(status))
         table.insert(snapshotParts,objectiveSnapshot)
 
@@ -502,6 +494,10 @@ function QL:Refresh(fastRefresh)
             logIndex=index,
             title=title,
             level=level,
+            -- Vanilla/pfQuest uses GetQuestLogTitle().tag as the live elite
+            -- marker. Preserve it with the quest instead of reclassifying
+            -- quests from database metadata.
+            tag=tag,
             zoneGroup=currentHeader,
             status=status,
             complete=complete,

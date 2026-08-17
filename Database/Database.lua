@@ -259,6 +259,11 @@ function DB:GetCreatureFaction(id)
   return raw and (raw["fac"] or raw["faction"]) or nil
 end
 
+function DB:GetObjectFaction(id)
+  local raw=self:GetObjectRaw(id)
+  return raw and (raw["fac"] or raw["faction"]) or nil
+end
+
 
 function DB:GetMapIDByName(name)
   if not self.ready or not name then return nil end

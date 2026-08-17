@@ -22,3 +22,11 @@ Files not identified above retain their respective upstream/source licensing.
 
 `pvp_available.tga` and `pvp_complete.tga` are conversions of the red PvP quest
 marker references supplied directly for the Questie-Octo project.
+
+## Questie-Octo gray available artwork
+
+`available_gray.tga` is a WoW-compatible TGA conversion of the 32x32 gray
+available-quest marker image supplied directly by the Questie-Octo project
+maintainer on 2026-08-17. The conversion preserves the supplied pixels and
+alpha; it is not copied from Questie's `available_gray.blp`.
+

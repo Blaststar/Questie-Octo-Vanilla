@@ -1,4 +1,4 @@
-local ACECORE_MAJOR, ACECORE_MINOR = "AceCore-3.0", 1
+local ACECORE_MAJOR, ACECORE_MINOR = "QuestieOcto_AceCore-3.0", 1
 local AceCore, oldminor = LibStub:NewLibrary(ACECORE_MAJOR, ACECORE_MINOR)
 
 if not AceCore then return end -- No upgrade needed
@@ -48,7 +48,7 @@ AceCore.errorhandler = errorhandler
 
 local function CreateSafeDispatcher(argCount)
 	local code = [[
-		local errorhandler = LibStub("AceCore-3.0").errorhandler
+		local errorhandler = LibStub("QuestieOcto_AceCore-3.0").errorhandler
 		local method, UP_ARGS
 		local function call()
 			local func, ARGS = method, UP_ARGS

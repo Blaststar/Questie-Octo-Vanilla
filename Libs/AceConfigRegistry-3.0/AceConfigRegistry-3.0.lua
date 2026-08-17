@@ -9,14 +9,14 @@
 -- @class file
 -- @name AceConfigRegistry-3.0
 -- @release $Id: AceConfigRegistry-3.0.lua 1139 2016-07-03 07:43:51Z nevcairiel $
-local MAJOR, MINOR = "AceConfigRegistry-3.0", 16
+local MAJOR, MINOR = "QuestieOcto_AceConfigRegistry-3.0", 16
 local AceConfigRegistry = LibStub:NewLibrary(MAJOR, MINOR)
 
 if not AceConfigRegistry then return end
 
 AceConfigRegistry.tables = AceConfigRegistry.tables or {}
 
-local CallbackHandler = LibStub:GetLibrary("CallbackHandler-1.0")
+local CallbackHandler = LibStub:GetLibrary("QuestieOcto_CallbackHandler-1.0")
 
 if not AceConfigRegistry.callbacks then
 	AceConfigRegistry.callbacks = CallbackHandler:New(AceConfigRegistry)

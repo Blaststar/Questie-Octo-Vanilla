@@ -79,6 +79,7 @@ M.stats={active=0,created=0,reused=0,hidden=0,exact=0,objectiveAreas=0,itemStart
 
 local ICON_ROOT="Interface\\AddOns\\Questie-Octo\\UI\\Icons\\"
 local TEX_AVAILABLE=ICON_ROOT.."available"
+local TEX_AVAILABLE_GRAY=ICON_ROOT.."available_gray"
 local TEX_MOBDROP=ICON_ROOT.."available_mobdrop"
 local TEX_OBJECTSTART=ICON_ROOT.."available_object"
 local TEX_COMPLETE=ICON_ROOT.."complete"
@@ -106,6 +107,28 @@ local TEX_STABLEMASTER=ICON_ROOT.."stablemaster"
 local TEX_VENDOR=ICON_ROOT.."vendor"
 local TEX_RARE=ICON_ROOT.."rares"
 
+-- Turtle deliberately keeps full quest XP through 25 levels above the quest
+-- (Tortoise src/game/QuestDef.cpp). The server file is XP logic rather than a
+-- client icon-color function, but it matches the observed Turtle native quest
+-- presentation and is the project's accepted low-level gray-marker boundary.
+-- Exactly +25 stays normal; +26 and beyond becomes gray.
+local TURTLE_GRAY_QUEST_DELTA=25
+
+local function IsGrayAvailableQuest(node)
+  if not node or (node.role~="available" and node.role~="itemStart") then return false end
+  local questID=tonumber(node.questID)
+  if not questID then return false end
+
+  local q=QuestieOcto.QuestModel and QuestieOcto.QuestModel:Get(questID) or nil
+  if not q or q.presentationAlwaysNormal then return false end
+
+  local questLevel=tonumber(q.level)
+  local playerLevel=UnitLevel and tonumber(UnitLevel("player")) or nil
+  if not questLevel or questLevel<=0 or not playerLevel or playerLevel<=0 then return false end
+
+  return playerLevel>questLevel+TURTLE_GRAY_QUEST_DELTA
+end
+
 local function TextureForNode(node)
   if node.role=="flightMaster" then return TEX_FLIGHT end
   if node.role=="auctioneer" then return TEX_AUCTIONEER end
@@ -120,16 +143,18 @@ local function TextureForNode(node)
   if node.role=="vendor" then return TEX_VENDOR end
   if node.role=="rareMob" then return TEX_RARE end
   if node.role=="itemStart" then
-    -- Presentation priority: PvP > Repeatable > Event > Normal.
+    -- Presentation priority: PvP > Repeatable > Event > Turtle low-level gray > Normal.
     if node.pvp then return TEX_PVP_AVAILABLE end
     if node.repeatable then return TEX_REPEATABLE_AVAILABLE end
     if node.event then return TEX_EVENT_AVAILABLE end
+    if IsGrayAvailableQuest(node) then return TEX_AVAILABLE_GRAY end
     return TEX_AVAILABLE
   end
   if node.role=="available" then
     if node.pvp then return TEX_PVP_AVAILABLE end
     if node.repeatable then return TEX_REPEATABLE_AVAILABLE end
     if node.event then return TEX_EVENT_AVAILABLE end
+    if IsGrayAvailableQuest(node) then return TEX_AVAILABLE_GRAY end
     return TEX_AVAILABLE
   end
   if node.role=="turnin" then
@@ -146,6 +171,7 @@ local function TextureForNode(node)
   end
   if node.role=="objectiveObject" then return TEX_OBJECT end
   if node.role=="objectiveCreature" then return TEX_SLAY end
+  if node.role=="objectiveArea" then return TEX_EVENT end
   return TEX_INCOMPLETE
 end
 local function RolePriority(role)
@@ -157,7 +183,7 @@ local function RolePriority(role)
   -- At a shared Full Nodes coordinate, a direct objective should own the
   -- displayed quest color over an indirect item-drop source. The merged pin
   -- still retains every quest/objective entry for its tooltip.
-  if role=="objectiveObject" or role=="objectiveCreature" then return 20 end
+  if role=="objectiveObject" or role=="objectiveCreature" or role=="objectiveArea" then return 20 end
   if role=="objectiveItemSource" then return 15 end
   return 10
 end
@@ -217,6 +243,10 @@ end
 
 function M:GetTextureForNode(node)
   return TextureForNode(node)
+end
+
+function M:IsGrayAvailableQuest(node)
+  return IsGrayAvailableQuest(node)
 end
 
 function M:GetRolePriority(role)
@@ -596,7 +626,7 @@ function M:RenderItemStartArea(area,generation,continentZoneMapID)
   if itemQuest and itemQuest.pvp and not DisplaySettings():Get("showPvPRelatedQuests") then return end
   local itemEvent=itemQuest and itemQuest.eventID and QuestieOcto.EventAvailability and QuestieOcto.EventAvailability:IsPresentationEvent(itemQuest.eventID) or false
   local itemPvP=itemQuest and itemQuest.pvp or false
-  local itemRepeatable=itemQuest and itemQuest.repeatable or false
+  local itemRepeatable=itemQuest and itemQuest.presentationRepeatable or false
 
   local key="itemarea:"..tostring(area.key)
   local pin=self.frames[key]
@@ -636,7 +666,7 @@ function M:RenderItemStartArea(area,generation,continentZoneMapID)
   pin.sourceKind="area"
   pin.displayName=area.displayName
   pin.clusterCount=area.n
-  pin.texture:SetTexture(TextureForNode({role="itemStart",event=pin.event,pvp=pin.pvp,repeatable=pin.repeatable}))
+  pin.texture:SetTexture(TextureForNode({role="itemStart",questID=area.questID,event=pin.event,pvp=pin.pvp,repeatable=pin.repeatable}))
   pin.texture:SetDrawLayer("OVERLAY",5)
   if QuestieOcto.Visuals then
     QuestieOcto.Visuals:ApplyPin(pin,{role="itemStart",questID=area.questID,pvp=pin.pvp,repeatable=pin.repeatable},false,1)
@@ -1374,11 +1404,18 @@ QuestieOcto:RegisterMessage("PREPARED_MAP_READY",M,"OnPreparedMapReady")
 
 local f=CreateFrame("Frame","QuestieOctoWorldMapEvents",UIParent)
 f:RegisterEvent("WORLD_MAP_UPDATE")
+f:RegisterEvent("PLAYER_LEVEL_UP")
 f:SetScript("OnEvent",function()
   if event=="WORLD_MAP_UPDATE" then
     if WorldMapFrame and WorldMapFrame:IsVisible() then
       M:EnsureDisplayedContextCurrent()
     end
+  elseif event=="PLAYER_LEVEL_UP" then
+    -- Gray classification depends only on the current player/quest levels.
+    -- Rebind the visible map presentation; do not rebuild geometry or quest truth.
+    QuestieOcto.Scheduler:After(0.01,function()
+      if WorldMapFrame and WorldMapFrame:IsVisible() then M:RequestSync(true) end
+    end,"map-gray-level-refresh")
   end
 end)
 

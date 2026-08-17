@@ -2,7 +2,7 @@
 -- Original Questie foundation: CallbackHandler-1.0 r1131 / MINOR 6.
 -- Turtle 1.12 Lua 5.0 supports vararg declarations but consumes them through
 -- the implicit 'arg' table rather than Lua 5.1's '...' expression.
-local MAJOR, MINOR = "CallbackHandler-1.0", 6
+local MAJOR, MINOR = "QuestieOcto_CallbackHandler-1.0", 6
 local CallbackHandler = LibStub:NewLibrary(MAJOR, MINOR)
 
 if not CallbackHandler then return end

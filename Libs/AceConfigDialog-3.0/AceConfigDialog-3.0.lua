@@ -4,12 +4,12 @@
 -- @release $Id: AceConfigDialog-3.0.lua 1139 2016-07-03 07:43:51Z nevcairiel $
 
 local LibStub = LibStub
-local MAJOR, MINOR = "AceConfigDialog-3.0", 63
+local MAJOR, MINOR = "QuestieOcto_AceConfigDialog-3.0", 63
 local AceConfigDialog, oldminor = LibStub:NewLibrary(MAJOR, MINOR)
 
 if not AceConfigDialog then return end
 
-local AceCore = LibStub("AceCore-3.0")
+local AceCore = LibStub("QuestieOcto_AceCore-3.0")
 local wipe, strsplit = AceCore.wipe, AceCore.strsplit
 local safecall = AceCore.safecall
 local Dispatchers = AceCore.Dispatchers
@@ -23,8 +23,8 @@ AceConfigDialog.frame.apps = AceConfigDialog.frame.apps or {}
 AceConfigDialog.frame.closing = AceConfigDialog.frame.closing or {}
 AceConfigDialog.frame.closeAllOverride = AceConfigDialog.frame.closeAllOverride or {}
 
-local gui = LibStub("AceGUI-3.0")
-local reg = LibStub("AceConfigRegistry-3.0")
+local gui = LibStub("QuestieOcto_AceGUI-3.0")
+local reg = LibStub("QuestieOcto_AceConfigRegistry-3.0")
 
 -- Lua APIs
 local tconcat, tinsert, tsort, tremove, tgetn, tsetn = table.concat, table.insert, table.sort, table.remove, table.getn, table.setn

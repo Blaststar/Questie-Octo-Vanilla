@@ -121,6 +121,16 @@ Repeatable flags come from the server-derived enrichment or trustworthy live
 observation. One-and-done repeatables can opt into `hideAfterFirstCompletion`;
 `CLUCK!` uses that rule.
 
+`CLUCK!` (3861) is also a scripted/conditional offer rather than a normal static
+Chicken pickup: `/chicken` temporarily exposes the quest. To keep the quest
+discoverable without covering every Chicken spawn, Questie-Octo deliberately uses
+one representative Westfall Chicken at 55.6,30.9 as the static pickup/turn-in map
+marker. The tooltip explains that `/chicken` is required. This does not change
+server truth: other Chickens can still trigger/complete the scripted interaction.
+The server repeatable flag remains intact for completion logic, but the representative
+marker uses ordinary yellow quest presentation instead of blue repeatable artwork.
+After the first completion, `hideAfterFirstCompletion` removes the discovery marker.
+
 The cloth donation chain is intentionally not flattened into one repeatable
 category: Wool/Silk/Mageweave/Runecloth donation steps are one-time quests, while
 the `Additional Runecloth` follow-ups carry the repeatable flag.
@@ -354,3 +364,66 @@ once historical completion says it was rewarded.
 ### Darkmoon logical event alias
 
 Turtle/pfQuest quest rows use both `event = 4` and `event = 5` for quest offers that are shared by the same Darkmoon Faire NPCs in both Elwynn and Mulgore. Questie-Octo preserves the authoritative value as `rawEventID`, but normalizes runtime `eventID` 5 to logical event 4. Availability and presentation therefore see one `DARKMOON_FAIRE` event; the anchored 14-day schedule and NPC coordinates determine the physical location. Construction events 23/24 remain distinct.
+
+## Restless / custom Dun Morogh map note
+
+`Restless` (41640) must be interpreted against Turtle/Octo's custom Dun Morogh, not
+the stock Vanilla artwork/boundary assumptions. The current Dun Morogh map visibly
+includes custom southeastern terrain such as Rugford's Mountain Rest. Durmir Rugford
+(62199) has map representations in both Dun Morogh (1) and Grim Reaches (5602).
+Hurl Cinderfist (62200), the 100% source for Durmir's Belongings (41686), now also
+has both representations: Dun Morogh 83.2/70.8 and Grim Reaches 4.1/92.0. Both are
+the same live world spawn transformed through the two overlapping WorldMapArea
+bounds. Keep both so the active objective is visible on Turtle's expanded Dun
+Morogh map as well as Grim Reaches; do not collapse these coordinates based on
+stock Vanilla Dun Morogh assumptions.
+
+## Turtle low-level gray available marker
+
+Questie-Octo 1.0.77 adds a gray available `!` presentation for ordinary
+available quests and ordinary item-start quests using the Turtle-specific
+accepted boundary:
+
+- player level <= quest level + 25: normal yellow available marker;
+- player level >= quest level + 26: gray available marker.
+
+The boundary is strict: exactly +25 remains yellow and +26 becomes gray.
+
+The source basis is Turtle's custom quest XP rule in Tortoise
+`src/game/QuestDef.cpp`, which retains full quest XP through `qLevel + 25`
+before reducing it at +26 and beyond. That server function computes XP, not
+client icon color directly, so the project does not claim it is itself the
+native marker-color implementation. It was adopted because it matches the
+observed Turtle native quest behavior and replaces the stock Questie
+`GetQuestGreenRange()` assumption that was contradicted in-game.
+
+Special presentation remains higher priority than gray: PvP stays red,
+repeatable stays blue, and verified event/seasonal stays green. CLUCK! (3861)
+is the deliberate exception already chosen by the project: its single
+representative discovery marker stays ordinary yellow rather than repeatable
+blue or low-level gray. Turn-in `?` markers are unchanged.
+
+This gray classification is presentation-only and remains independent from the
+`Levels Below` visibility slider. Level-up refreshes rebind visible Map and
+Minimap marker textures without rebuilding quest data or map geometry.
+
+
+## 1.0.78 zone-wide rare item-start tooltip compaction
+
+The representative-marker rule for item-start sources below 0.50% must remain
+representative in the tooltip as well as on the map. Previously the map correctly
+collapsed those sources to one marker per quest/item/zone, but hovering that marker
+still printed every represented creature type and spawn count. For large world-drop
+items such as Pendant of Myzrael this could create a tooltip taller than the screen
+and hide the actual quest/item information.
+
+Zone-wide representative tooltips now show only a compact aggregate source count,
+the quest, and the actual represented minimum/maximum drop-rate range. The underlying
+source list remains unchanged. Ordinary non-zone-wide clustered item-start tooltips
+still list their nearby source creatures normally.
+
+## 1.0.79 representative-tooltip wording cleanup
+
+Removed the redundant `One zone marker represents item-start sources below 0.50%.`
+line from zone-wide rare item-start tooltips. The representative threshold and all
+source/drop data remain unchanged; this is tooltip presentation only.

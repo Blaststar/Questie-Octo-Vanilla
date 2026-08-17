@@ -462,8 +462,32 @@ local function PvPNodeVisible(node)
   return Settings():Get("showPvPRelatedQuests") and true or false
 end
 
-local function ItemAreaVisible(area)
-  if not area or not IsRoleEnabled("itemStart") then return false end
+-- Map and Minimap share the same item-start presentation plan. The regular
+-- prepared plan still contains raw item-start descriptors because Full Nodes
+-- can share physical slots with active objectives, so the minimap explicitly
+-- ignores item-start entries from that base plan and consumes the dedicated
+-- World Map item-start plan instead. This gives both displays the same <0.50%
+-- zone-wide representative marker without changing the underlying source data.
+-- Inside dungeons/raids, only those ultra-rare representative markers are
+-- hidden; meaningful >=0.50% item starters remain visible.
+local function MinimapNodeVisible(node,allowItemStart)
+  if not node or not IsRoleEnabled(node.role) or not PvPNodeVisible(node) then return false end
+
+  if node.role=="itemStart" then
+    if not allowItemStart then return false end
+    if MM.inDungeonOrRaid and QuestieOcto.ItemStartAreas
+       and QuestieOcto.ItemStartAreas:IsZoneWideRareChance(node.chance) then
+      return false
+    end
+  end
+
+  return true
+end
+
+local function ItemAreaVisible(area,allowItemStart)
+  if not allowItemStart or not area or not IsRoleEnabled("itemStart") then return false end
+  if MM.inDungeonOrRaid and area.zoneWideRare then return false end
+
   local q=QuestieOcto.QuestModel:Get(area.questID)
   if q and q.pvp and not Settings():Get("showPvPRelatedQuests") then return false end
   return true
@@ -479,34 +503,35 @@ local function DescriptorCoordinates(desc)
   return nil,nil
 end
 
-local function DescriptorHasVisibleEntry(desc,revision)
+local function DescriptorHasVisibleEntry(desc,revision,allowItemStart)
   if not desc then return false end
-  if desc.minimapVisibilityRevision==revision then return desc.minimapVisible and true or false end
+  local visibilityRevision=(tonumber(revision) or 0)*2+(allowItemStart and 1 or 0)
+  if desc.minimapVisibilityRevision==visibilityRevision then return desc.minimapVisible and true or false end
 
   local visible=false
   if desc.type=="itemStartArea" then
-    visible=ItemAreaVisible(desc.area)
+    visible=ItemAreaVisible(desc.area,allowItemStart)
   elseif desc.type=="nodeSlot" then
     for _,entry in pairs(desc.entries or {}) do
       local node=entry.node
-      if node and IsRoleEnabled(node.role) and PvPNodeVisible(node) then visible=true; break end
+      if MinimapNodeVisible(node,allowItemStart) then visible=true; break end
     end
   elseif desc.type=="node" and desc.node then
-    visible=IsRoleEnabled(desc.node.role) and PvPNodeVisible(desc.node)
+    visible=MinimapNodeVisible(desc.node,allowItemStart)
   end
 
-  desc.minimapVisibilityRevision=revision
+  desc.minimapVisibilityRevision=visibilityRevision
   desc.minimapVisible=visible and true or false
   return visible
 end
 
-local function BindDescriptor(pin,desc,revision)
+local function BindDescriptor(pin,desc,revision,allowItemStart)
   ResetPin(pin)
   pin.boundDescriptor=desc
   pin.boundRevision=revision
 
   if desc.type=="itemStartArea" and desc.area then
-    if not ItemAreaVisible(desc.area) then return false end
+    if not ItemAreaVisible(desc.area,allowItemStart) then return false end
     local area=desc.area
     pin.itemStartArea=area
     pin.displayName=area.displayName
@@ -519,9 +544,9 @@ local function BindDescriptor(pin,desc,revision)
     local q=QuestieOcto.QuestModel:Get(area.questID)
     pin.event=q and q.eventID and QuestieOcto.EventAvailability and QuestieOcto.EventAvailability:IsPresentationEvent(q.eventID) or false
     pin.pvp=q and q.pvp or false
-    pin.repeatable=q and q.repeatable or false
+    pin.repeatable=q and q.presentationRepeatable or false
     pin.visualPriority=40
-    pin.texture:SetTexture(QuestieOcto.Map:GetTextureForNode({role="itemStart",event=pin.event,pvp=pin.pvp,repeatable=pin.repeatable}))
+    pin.texture:SetTexture(QuestieOcto.Map:GetTextureForNode({role="itemStart",questID=area.questID,event=pin.event,pvp=pin.pvp,repeatable=pin.repeatable}))
     pin.texture:SetDrawLayer("OVERLAY",5)
     if QuestieOcto.Visuals then
       QuestieOcto.Visuals:ApplyPin(pin,{role="itemStart",questID=area.questID,pvp=pin.pvp,repeatable=pin.repeatable},true,pin.lastAlpha or 1)
@@ -544,7 +569,7 @@ local function BindDescriptor(pin,desc,revision)
   local fullNode=nil
   for _,entry in pairs(entries or {}) do
     local node=entry.node
-    if node and IsRoleEnabled(node.role) and PvPNodeVisible(node) then
+    if MinimapNodeVisible(node,allowItemStart) then
       visible=true
       pin.clusterCount=math.max(pin.clusterCount or 1,entry.clusterCount or 1)
       AddEntry(pin,node)
@@ -615,6 +640,7 @@ function MM:RefreshPlan()
   if not mapID then
     self.mapID=nil
     self.plan=nil
+    self.itemStartPlan=nil
     self.planRevision=nil
     self:HideAll()
     return
@@ -628,9 +654,20 @@ function MM:RefreshPlan()
     self.lastZoom=nil
   end
 
+  -- Instance type changes at the same lifecycle boundaries that refresh the
+  -- minimap plan (entering world / zone changes). Evaluate it here rather
+  -- than polling GetInstanceInfo every 0.05 seconds.
+  local inDungeonOrRaid=QuestieOcto.API and QuestieOcto.API:IsInDungeonOrRaid() or false
+  if self.inDungeonOrRaid~=inDungeonOrRaid then
+    self.inDungeonOrRaid=inDungeonOrRaid
+    self.bindRevision=(self.bindRevision or 0)+1
+  end
+
   local plan=QuestieOcto.PreparedMap:Get(mapID)
-  if not plan then
+  local itemStartPlan=QuestieOcto.PreparedMap:GetWorldItemStarts(mapID)
+  if not plan or not itemStartPlan then
     self.plan=nil
+    self.itemStartPlan=nil
     self.planRevision=nil
     self:HideAll()
     if QuestieOcto.ZoneBootstrap then QuestieOcto.ZoneBootstrap:Request(mapID,0.01) end
@@ -638,6 +675,7 @@ function MM:RefreshPlan()
   end
 
   self.plan=plan
+  self.itemStartPlan=itemStartPlan
   self.planRevision=QuestieOcto.PreparedMap.stateRevision
   self.stats.refreshes=self.stats.refreshes+1
   self:UpdatePositions(true)
@@ -673,6 +711,8 @@ function MM:UpdatePositions(force)
   if self.planRevision~=QuestieOcto.PreparedMap.stateRevision then self:RefreshPlan(); return end
   local published=QuestieOcto.PreparedMap:Get(self.mapID)
   if published and published~=self.plan then self:RefreshPlan(); return end
+  local publishedItemStarts=QuestieOcto.PreparedMap:GetWorldItemStarts(self.mapID)
+  if publishedItemStarts and publishedItemStarts~=self.itemStartPlan then self:RefreshPlan(); return end
 
   local px,py=PlayerPosition()
   if not px or not py then self:HideAll(); return end
@@ -717,40 +757,53 @@ function MM:UpdatePositions(force)
 
   -- pfQuest architecture: scan coordinate data, but allocate/reuse UI Buttons
   -- only for coordinates that are actually inside the current minimap circle.
-  -- There is intentionally no hard node cap here.
-  for _,desc in ipairs(self.plan or {}) do
-    if DescriptorHasVisibleEntry(desc,revision) then
-      local x,y=DescriptorCoordinates(desc)
-      if x and y then
-        local xPos=(x-px)*xDraw
-        local yPos=(y-py)*yDraw
-        local inside=false
-        if squareMinimap then
-          inside=math.abs(xPos)<(width/2) and math.abs(yPos)<(height/2)
-        else
-          inside=xPos*xPos+yPos*yPos<radiusSquared
-        end
-        if inside then
-          frameIndex=frameIndex+1
-          local pin=self:GetOrCreate(frameIndex)
-          local bound=(pin.boundDescriptor==desc and pin.boundRevision==revision)
-          if not bound then bound=BindDescriptor(pin,desc,revision) end
+  -- There is intentionally no hard node cap here. Item-start entries from the
+  -- base plan are skipped, then the same dedicated item-start plan used by the
+  -- World Map is scanned so ultra-rare sources have identical representation.
+  -- Keep this as a two-pass loop instead of allocating a closure/table in the
+  -- moving-player hot path.
+  local planPass=1
+  while planPass<=2 do
+    local scanPlan=planPass==1 and self.plan or self.itemStartPlan
+    local allowItemStart=planPass==2
+    local bindRevision=(tonumber(revision) or 0)*2+(allowItemStart and 1 or 0)
 
-          if bound then
-            pin.questieOctoBaseX=xPos
-            pin.questieOctoBaseY=-yPos
-            local groupKey=pin.coordKey or tostring(x)..":"..tostring(y)
-            visibleGroups[groupKey]=visibleGroups[groupKey] or {}
-            table.insert(visibleGroups[groupKey],pin)
-            table.insert(activeFrames,pin)
-            if not pin:IsShown() then pin:Show() end
-            CountVisible(pin)
+    for _,desc in ipairs(scanPlan or {}) do
+      if DescriptorHasVisibleEntry(desc,revision,allowItemStart) then
+        local x,y=DescriptorCoordinates(desc)
+        if x and y then
+          local xPos=(x-px)*xDraw
+          local yPos=(y-py)*yDraw
+          local inside=false
+          if squareMinimap then
+            inside=math.abs(xPos)<(width/2) and math.abs(yPos)<(height/2)
           else
-            frameIndex=frameIndex-1
+            inside=xPos*xPos+yPos*yPos<radiusSquared
+          end
+          if inside then
+            frameIndex=frameIndex+1
+            local pin=self:GetOrCreate(frameIndex)
+            local bound=(pin.boundDescriptor==desc and pin.boundRevision==bindRevision)
+            if not bound then bound=BindDescriptor(pin,desc,bindRevision,allowItemStart) end
+
+            if bound then
+              pin.questieOctoBaseX=xPos
+              pin.questieOctoBaseY=-yPos
+              local groupKey=pin.coordKey or tostring(x)..":"..tostring(y)
+              visibleGroups[groupKey]=visibleGroups[groupKey] or {}
+              table.insert(visibleGroups[groupKey],pin)
+              table.insert(activeFrames,pin)
+              if not pin:IsShown() then pin:Show() end
+              CountVisible(pin)
+            else
+              frameIndex=frameIndex-1
+            end
           end
         end
       end
     end
+
+    planPass=planPass+1
   end
 
   local offsets={{0,0},{10,0},{-10,0},{0,10},{0,-10},{8,8},{-8,8},{8,-8},{-8,-8}}
@@ -785,7 +838,7 @@ function MM:UpdatePositions(force)
   self.activeFrames=activeFrames
   self.stats.active=frameIndex
   self.stats.positionUpdates=self.stats.positionUpdates+1
-  self.stats.scannedDescriptors=table.getn(self.plan or {})
+  self.stats.scannedDescriptors=table.getn(self.plan or {})+table.getn(self.itemStartPlan or {})
   self.stats.poolSize=table.getn(self.frames or {})
 end
 
@@ -829,9 +882,20 @@ function MM:Start()
   f:RegisterEvent("ZONE_CHANGED")
   f:RegisterEvent("ZONE_CHANGED_NEW_AREA")
   f:RegisterEvent("MINIMAP_ZONE_CHANGED")
+  f:RegisterEvent("PLAYER_LEVEL_UP")
 
   f:SetScript("OnEvent",function()
     local eventName=event
+    if eventName=="PLAYER_LEVEL_UP" then
+      -- Force descriptor rebinding so +25/+26 gray presentation changes as
+      -- soon as the player levels, without touching the prepared map geometry.
+      QuestieOcto.Scheduler:After(0.01,function()
+        MM.bindRevision=(MM.bindRevision or 0)+1
+        MM:RefreshPlan()
+      end,"minimap-gray-level-refresh")
+      return
+    end
+
     QuestieOcto.Scheduler:After(0.01,function()
       RestoreCurrentZoneMapContext(eventName)
       MM:RefreshPlan()

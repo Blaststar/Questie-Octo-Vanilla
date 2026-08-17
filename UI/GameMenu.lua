@@ -72,6 +72,21 @@ local function InstallDragonflightMenu()
   return true
 end
 
+local function SkinPfUIGameMenuButton(button)
+  if not button or not pfUI or not pfUI.api or not pfUI.api.SkinButton then return end
+  if not pfUI.skin or not pfUI.skin["Game Menu"] then return end
+
+  local disabled=pfUI_config and pfUI_config["disabled"]
+  if disabled and disabled["skin_Game Menu"]=="1" then return end
+
+  -- pfUI skins Turtle WoW buttons that are added after its initial Game Menu
+  -- skin pass the same way: normalize the label, then use pfUI's own button
+  -- skin helper instead of imitating pfUI's appearance inside Questie-Octo.
+  local font=button.GetFontString and button:GetFontString()
+  if font and font.SetTextColor then font:SetTextColor(1,1,1,1) end
+  pfUI.api.SkinButton(button)
+end
+
 local function InstallBlizzardMenu()
   if not GameMenuFrame or not GameMenuButtonUIOptions or not GameMenuButtonKeybindings then
     return false
@@ -92,6 +107,7 @@ local function InstallBlizzardMenu()
 
   button:SetPoint("TOP",anchor,"BOTTOM",0,-1)
   button:SetText("Questie Options")
+  SkinPfUIGameMenuButton(button)
   button:SetScript("OnClick",function()
     if HideUIPanel then
       HideUIPanel(GameMenuFrame)

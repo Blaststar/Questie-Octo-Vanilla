@@ -124,6 +124,28 @@ local function FormatDropRate(rate)
   return string.format("%.3f",rate)
 end
 
+local function ItemStartAreaDropRateText(area)
+  local minimum=nil
+  local maximum=nil
+
+  for _,source in pairs((area and area.sourceList) or {}) do
+    local chance=tonumber(source.chance)
+    if chance and chance>0 then
+      if not minimum or chance<minimum then minimum=chance end
+      if not maximum or chance>maximum then maximum=chance end
+    end
+  end
+
+  if not minimum or not maximum then return nil end
+
+  local minText=FormatDropRate(minimum)
+  local maxText=FormatDropRate(maximum)
+  if not minText or not maxText then return nil end
+
+  if minText==maxText then return minText.."%" end
+  return minText.."%~"..maxText.."%"
+end
+
 local function DifficultyColor(level,questID)
   -- Use the same authority as the native Quest Log.  Octo/Turtle modifies the
   -- low-level/easy band, so reproducing stock Classic thresholds makes map
@@ -150,12 +172,22 @@ end
 local function RespawnText(seconds)
   seconds=tonumber(seconds)
   if not seconds or seconds<=0 then return nil end
+  seconds=math.floor(seconds)
 
-  if math.mod(seconds,60)==0 then
-    return "~"..tostring(math.floor(seconds/60)).." min"
+  if seconds<60 then return "~"..tostring(seconds).."s" end
+
+  local minutes=math.floor(seconds/60)
+  -- Roll long respawns up into hours so 18000s reads "~5h", not "~300 min".
+  if minutes>=60 then
+    local hours=math.floor(minutes/60)
+    local mins=math.mod(minutes,60)
+    if mins==0 then return "~"..tostring(hours).."h" end
+    return "~"..tostring(hours).."h "..tostring(mins).."m"
   end
 
-  return "~"..tostring(math.floor(seconds/60)).."m "..tostring(math.mod(seconds,60)).."s"
+  local secs=math.mod(seconds,60)
+  if secs==0 then return "~"..tostring(minutes).." min" end
+  return "~"..tostring(minutes).."m "..tostring(secs).."s"
 end
 
 local function SourceDisplayName(source)
@@ -207,6 +239,9 @@ local function LiveObjectiveText(node)
 end
 
 local function Extra(node)
+  if node.role=="available" and node.conditionalOffer then
+    return tostring(node.conditionalOffer)
+  end
   if node.role=="itemStart" and node.itemName then
     local text
     if node.vendor then text="Sells ["..tostring(node.itemName).."]"
@@ -216,7 +251,8 @@ local function Extra(node)
   end
   if node.role=="objectiveCreature"
      or node.role=="objectiveObject"
-     or node.role=="objectiveItemSource" then
+     or node.role=="objectiveItemSource"
+     or node.role=="objectiveArea" then
     local liveText=LiveObjectiveText(node)
     if liveText and liveText~="" then
       local text=liveText
@@ -1101,27 +1137,38 @@ function T:Show(pin)
   if pin.itemStartArea then
     local area=pin.itemStartArea
 
-    -- Use AddDoubleLine with an empty right column for every source row.
-    -- This avoids the first source row inheriting the tooltip's title-sized
-    -- presentation while keeping every monster line visually identical.
-    for _,source in pairs(area.sourceList or {}) do
-      local sourceText=SourceDisplayName(source).." ("..tostring(source.count)..
-        (area.zoneWideRare and " zone spawns)" or " nearby spawns)")
-      if area.zoneWideRare and source.chance and Settings():Get("enableTooltipDroprates") then
-        sourceText=sourceText.." - "..(FormatDropRate(source.chance) or tostring(source.chance)).."%"
-      end
-      tooltip:AddDoubleLine(
-        sourceText,
-        "",
-        .2,1,.35,
-        .2,1,.35
+    if area.zoneWideRare then
+      -- A zone-wide representative exists specifically to make enormous
+      -- world-drop source sets readable. Do not undo that simplification by
+      -- dumping every represented creature into the tooltip (Pendant of
+      -- Myzrael can have dozens of source types in a single zone). Keep the
+      -- full source list in the data and present only a compact aggregate.
+      local sourceCount=table.getn(area.sourceList or {})
+      local spawnCount=tonumber(area.n) or 0
+      tooltip:SetText("Rare item-start sources",.2,1,.35)
+      tooltip:AddLine(
+        tostring(sourceCount).." creature types, "..tostring(spawnCount).." zone spawns",
+        .65,.65,.65
       )
+    else
+      -- Ordinary clustered item-start areas still list their nearby sources.
+      -- Use AddDoubleLine with an empty right column for every source row so
+      -- the first source does not inherit the tooltip's title-sized font.
+      for _,source in pairs(area.sourceList or {}) do
+        local sourceText=SourceDisplayName(source).." ("..tostring(source.count).." nearby spawns)"
+        tooltip:AddDoubleLine(
+          sourceText,
+          "",
+          .2,1,.35,
+          .2,1,.35
+        )
 
-      local rank=RareRankText(source.rank)
-      local respawn=rank and RespawnText(source.respawnSeconds) or nil
-      if respawn then
-        local rareTag=RareRankText(source.rank) or "Rare"
-        tooltip:AddLine("["..rareTag.."] Respawn: "..respawn,.75,.75,.75)
+        local rank=RareRankText(source.rank)
+        local respawn=rank and RespawnText(source.respawnSeconds) or nil
+        if respawn then
+          local rareTag=RareRankText(source.rank) or "Rare"
+          tooltip:AddLine("["..rareTag.."] Respawn: "..respawn,.75,.75,.75)
+        end
       end
     end
 
@@ -1136,33 +1183,19 @@ function T:Show(pin)
       )
     end
 
-    local chance=nil
-    for _,source in pairs(area.sourceList or {}) do
-      if source.chance then
-        chance=source.chance
-        break
-      end
-    end
+    local dropRateText=ItemStartAreaDropRateText(area)
 
     local itemLabel=tostring(area.itemName or ("Item "..tostring(area.itemID)))
     if Settings():Get("enableTooltipsItemID") and area.itemID then
       itemLabel=itemLabel.." (Item "..tostring(area.itemID)..")"
     end
-    if area.zoneWideRare then
-      local threshold=tonumber(area.rareThreshold) or 0.1
-      tooltip:AddLine(
-        "One zone marker represents item-start sources below "..string.format("%.2f",threshold).."%.",
-        .65,.65,.65,true
-      )
-    end
-
     local line="Drops ["..itemLabel.."]"
-    if chance and not area.zoneWideRare and Settings():Get("enableTooltipDroprates") then
-      line=line.." ("..(FormatDropRate(chance) or tostring(chance)).."%)"
+    if dropRateText and Settings():Get("enableTooltipDroprates") then
+      line=line.." ("..dropRateText..")"
     end
     tooltip:AddLine(line.." - item starts quest",.82,.82,.82,true)
 
-    NormalizeFirstRowFont(tooltip)
+    if not area.zoneWideRare then NormalizeFirstRowFont(tooltip) end
     tooltip:Show()
     return
   end

@@ -7,7 +7,7 @@ function QuestieOcto:OnFoundationServiceReady()
   if self.Database.ready and self.DatabaseAPI:IsReady() and self.Completion.ready and self.QuestLog.snapshot then
     self.ready=true
     local q=self.DatabaseAPI:GetQuestCount()
-    self:Print("foundation ready - "..tostring(q).." quests, "..tostring(self.Completion:Count())..
+    self:Print("Foundation ready - "..tostring(q).." quests, "..tostring(self.Completion:Count())..
       " completed, "..tostring(self.QuestLog.stats.resolved).." active quest IDs resolved.")
     self:SendMessage("FOUNDATION_READY")
   end
