@@ -869,40 +869,30 @@ function M:RenderContinentNode(node,mapID,generation)
   local points=QuestieOcto.Clustering:PointsForNodeOnMap(node,mapID)
   if not points or table.getn(points)==0 then return 0 end
 
-  local rendered=0
-  if node.role=="itemStart" then
-    -- Item-start sources can have dozens of spawn points. On a continent map
-    -- they represent one available quest, so use a single centroid marker per
-    -- source/zone instead of turning the continent into an objective-node map.
-    local sx,sy,n=0,0,0
-    for _,point in pairs(points) do
-      local px,py=projection:Project(mapID,point.x,point.y)
-      if px and py then sx=sx+px; sy=sy+py; n=n+1 end
-    end
-    if n>0 then
-      local x,y=sx/n,sy/n
-      local pin=self:GetOrCreate(ContinentPinKey(node,mapID,x,y),node,x,y,1,generation,"exact")
-      if pin then pin.continentZoneMapID=mapID end
-      return 1
-    end
-    return 0
-  end
-
+  -- On the continent overview every source (quest giver, turn-in, flight master,
+  -- item start) collapses to ONE centroid marker per zone, so a source's many
+  -- spawn points do not stack into apparent duplicates when zoomed out. Zone
+  -- maps keep their full per-spawn detail through the normal zone sync.
+  local sx,sy,n=0,0,0
   for _,point in pairs(points) do
-    local x,y=projection:Project(mapID,point.x,point.y)
-    if x and y then
-      local pin=self:GetOrCreate(ContinentPinKey(node,mapID,x,y),node,x,y,1,generation,"exact")
-      if pin then pin.continentZoneMapID=mapID end
-      rendered=rendered+1
-    end
+    local px,py=projection:Project(mapID,point.x,point.y)
+    if px and py then sx=sx+px; sy=sy+py; n=n+1 end
   end
-  return rendered
+  if n>0 then
+    local x,y=sx/n,sy/n
+    local pin=self:GetOrCreate(ContinentPinKey(node,mapID,x,y),node,x,y,1,generation,"exact")
+    if pin then pin.continentZoneMapID=mapID end
+    return 1
+  end
+  return 0
 end
 
-local function AddContinentRareItemStart(groups,node,mapID)
-  if not node or node.role~="itemStart" or not QuestieOcto.ItemStartAreas:IsZoneWideRareChance(node.chance) then return false end
-  -- Consume ultra-rare nodes even when their world-map category is disabled so
-  -- they do not fall back to the ordinary per-source continent renderer.
+local function AddContinentItemStart(groups,node,mapID)
+  if not node or node.role~="itemStart" then return false end
+  -- Group EVERY item-start source (not only ultra-rare ones) into one continent
+  -- marker per item-start quest, so a starter item that drops from many mobs is
+  -- a single overview icon instead of a pin per source. Consume disabled nodes
+  -- too so they never fall back to the per-source continent renderer.
   if not IsRoleEnabled(node.role) or not IsPvPQuestNodeEnabled(node) or not IsQuestMarkerNodeEnabled(node) then return true end
   local projection=QuestieOcto.ContinentProjection
   if not projection then return false end
@@ -911,10 +901,11 @@ local function AddContinentRareItemStart(groups,node,mapID)
   if not group then
     group={
       questID=node.questID,itemID=node.itemID,itemName=node.itemName,
-      sx=0,sy=0,n=0,sources={}
+      sx=0,sy=0,n=0,sources={},rare=false
     }
     groups[key]=group
   end
+  if QuestieOcto.ItemStartAreas:IsZoneWideRareChance(node.chance) then group.rare=true end
 
   local points=QuestieOcto.Clustering:PointsForNodeOnMap(node,mapID)
   for _,point in pairs(points or {}) do
@@ -937,7 +928,7 @@ local function AddContinentRareItemStart(groups,node,mapID)
   return true
 end
 
-local function RenderContinentRareItemStarts(groups,mapID,generation)
+local function RenderContinentItemStarts(groups,mapID,generation)
   for _,group in pairs(groups or {}) do
     if group.n and group.n>0 then
       local sourceList={}
@@ -950,10 +941,10 @@ local function RenderContinentRareItemStarts(groups,mapID,generation)
       local area={
         x=group.sx/group.n,y=group.sy/group.n,n=group.n,
         questID=group.questID,itemID=group.itemID,itemName=group.itemName,
-        sourceList=sourceList,zoneWideRare=true,
+        sourceList=sourceList,zoneWideRare=group.rare and true or false,
         rareThreshold=QuestieOcto.ItemStartAreas.zoneWideRareThreshold,
-        displayName=first and first.name or "Rare item-start source",
-        key="continent:"..tostring(mapID)..":"..tostring(group.questID)..":"..tostring(group.itemID or 0)..":zone-rare"
+        displayName=first and first.name or "Item-start source",
+        key="continent:"..tostring(mapID)..":"..tostring(group.questID)..":"..tostring(group.itemID or 0)..":itemstart"
       }
       M:RenderItemStartArea(area,generation,mapID)
     end
@@ -1000,13 +991,13 @@ function M:StartContinentSync(continentMapID,doPrune)
 
       if nodePos<=table.getn(nodes) then
         local node=nodes[nodePos]
-        if not AddContinentRareItemStart(rareGroups,node,mapIDs[mapPos]) then
+        if not AddContinentItemStart(rareGroups,node,mapIDs[mapPos]) then
           M:RenderContinentNode(node,mapIDs[mapPos],generation)
         end
         nodePos=nodePos+1
         budget=budget-1
       else
-        RenderContinentRareItemStarts(rareGroups,mapIDs[mapPos],generation)
+        RenderContinentItemStarts(rareGroups,mapIDs[mapPos],generation)
         nodes=nil
         rareGroups={}
         mapPos=mapPos+1
@@ -1284,12 +1275,12 @@ function M:PatchContinentQuests(changedQuests)
     local rareGroups={}
     for _,node in pairs(QuestieOcto.Nodes:GetMapNodes(mapID) or {}) do
       if changed[tonumber(node.questID)] then
-        if not AddContinentRareItemStart(rareGroups,node,mapID) then
+        if not AddContinentItemStart(rareGroups,node,mapID) then
           self:RenderContinentNode(node,mapID,self.generation)
         end
       end
     end
-    RenderContinentRareItemStarts(rareGroups,mapID,self.generation)
+    RenderContinentItemStarts(rareGroups,mapID,self.generation)
   end
 
   -- Re-evaluate only pins that lost old relationships. AddEntry already handles
