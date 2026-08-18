@@ -354,17 +354,18 @@ local function CreateGeneralTab()
       }},
 
       quest_options={type="group",order=10,name="Quest Options",inline=true,args={
-        showQuestArrow={type="toggle",order=1,name="Show Quest Arrow",desc="Shows arrow that points towards nearest quest objective.",width="full",get=GetValue,set=SetValue},
-        questLogShowLevels={type="toggle",order=2,name="Show Quest Levels",desc="Show quest levels in the Quest Log.",width="full",get=GetValue,set=SetValue},
-        showLowLevelQuests={type="toggle",order=3,name="Show Low-Level Quests",desc="Show quests below the normal green quest range.",get=GetValue,set=SetValue},
-        lowLevelQuestRange={type="range",order=4,name=function()
+        showQuestRoute={type="toggle",order=1,name="Show Quest Route",desc="Shows fasted route on map to complete objectives.",width="full",get=GetValue,set=SetValue},
+        showQuestArrow={type="toggle",order=2,name="Show Quest Arrow",desc="Shows arrow that points towards nearest quest objective.",width="full",get=GetValue,set=SetValue},
+        questLogShowLevels={type="toggle",order=3,name="Show Quest Levels",desc="Show quest levels in the Quest Log.",width="full",get=GetValue,set=SetValue},
+        showLowLevelQuests={type="toggle",order=4,name="Show Low-Level Quests",desc="Show quests below the normal green quest range.",get=GetValue,set=SetValue},
+        lowLevelQuestRange={type="range",order=5,name=function()
           local value=tonumber(Settings():Get("lowLevelQuestRange")) or 35
           if value>=35 then return "Levels Below: All" end
           return "Levels Below: "..tostring(value)
         end,desc="Limit how many levels below you are shown. All removes the limit.",width="normal",min=5,max=35,step=5,arg={questieHideEditBox=true,questieMaxLabel="All",questieCommitOnMouseUp=true,questieLiveLabelPrefix="Levels Below: "},disabled=function() return not Settings():Get("showLowLevelQuests") end,get=GetValue,set=SetValue},
-        showRepeatableQuests={type="toggle",order=5,name="Show Repeatable Quests",desc="Show available repeatable quests.",width="full",get=GetValue,set=SetValue},
-        showEventQuests={type="toggle",order=6,name="Show Event Quests",desc="Show available event quests.",width="full",get=GetValue,set=SetValue},
-        showPvPRelatedQuests={type="toggle",order=7,name="Show PVP Related Quests",desc="Show PvP quest icons on the map and minimap.",width="full",get=GetValue,set=SetValue},
+        showRepeatableQuests={type="toggle",order=6,name="Show Repeatable Quests",desc="Show available repeatable quests.",width="full",get=GetValue,set=SetValue},
+        showEventQuests={type="toggle",order=7,name="Show Event Quests",desc="Show available event quests.",width="full",get=GetValue,set=SetValue},
+        showPvPRelatedQuests={type="toggle",order=8,name="Show PVP Related Quests",desc="Show PvP quest icons on the map and minimap.",width="full",get=GetValue,set=SetValue},
       }},
       reset_header={type="header",order=90,name="Questie Options"},
       enableDarkTheme={type="toggle",order=91,name="Enable Dark Theme",desc="Darken the configuration frame backdrops.",width="full",

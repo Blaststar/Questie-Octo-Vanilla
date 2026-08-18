@@ -55,6 +55,7 @@ Libs\AceConfigRegistry-3.0\AceConfigRegistry-3.0.xml
 Libs\AceConfigDialog-3.0\AceConfigDialog-3.0.xml
 UI\QuestResearch.lua
 UI\QuestLinkTooltip.lua
+UI\QuestMenu.lua
 UI\Options.lua
 UI\GameMenu.lua
 Core\Bootstrap.lua

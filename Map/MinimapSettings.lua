@@ -90,8 +90,9 @@ S.defaults={
   questLogShowLevels=true,
   questLogDifficultyColors=true,
 
-  -- Quest objective arrow is opt-in.
+  -- Quest objective arrow and route are opt-in.
   showQuestArrow=false,
+  showQuestRoute=false,
 
   -- Options-frame dark theme is off by default so the config window opens with
   -- native Blizzard colors until the player opts in.
@@ -240,7 +241,7 @@ function S:Set(key,value)
       key=="enableTooltipsNPCID" or key=="enableTooltipsItemID" or
       key=="enableTooltipDroprates" or
       key=="questLogShowLevels" or key=="questLogDifficultyColors" or
-      key=="showQuestArrow" or
+      key=="showQuestArrow" or key=="showQuestRoute" or
       key=="useDarkTheme" or
       key=="trackerEnabled" or key=="trackerLocked" or key=="trackerAutoTrack" or
       key=="trackerShowCompleted" or key=="trackerHideCompletedObjectives" or key=="trackerHideInCombat" or
@@ -314,8 +315,8 @@ function S:Set(key,value)
     return true
   end
 
-  -- The quest arrow reads its setting live each frame; just persist it.
-  if key=="showQuestArrow" then
+  -- The quest arrow and route read their setting live each frame; just persist.
+  if key=="showQuestArrow" or key=="showQuestRoute" then
     return true
   end
 

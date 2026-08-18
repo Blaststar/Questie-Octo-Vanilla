@@ -315,6 +315,32 @@ local function PlayerPosition()
   return MM.physicalPlayerX,MM.physicalPlayerY
 end
 
+-- Expose the live minimap coordinate transform so the route overlay can place
+-- its own dots using the exact projection the pins use.
+function MM:GetProjection()
+  if not Minimap or not Minimap.GetZoom then return nil end
+  local mapID=self.mapID or CurrentMapID()
+  if not mapID then return nil end
+  local px,py=PlayerPosition()
+  if not px or not py then return nil end
+  local mapWidth,mapHeight=QuestieOcto.DatabaseAPI:GetMinimapSize(mapID)
+  if not mapWidth or not mapHeight or mapWidth<=0 or mapHeight<=0 then return nil end
+  local zoom=Minimap:GetZoom() or 0
+  local indoor=MinimapIndoor()
+  local mapZoom=MINIMAP_ZOOM[indoor] and MINIMAP_ZOOM[indoor][zoom]
+  if not mapZoom or mapZoom<=0 then return nil end
+  local width,height=Minimap:GetWidth(),Minimap:GetHeight()
+  if not width or width<=0 or not height or height<=0 then return nil end
+  return {
+    px=px,py=py,
+    xDraw=width/(mapZoom/mapWidth)/100,
+    yDraw=height/(mapZoom/mapHeight)/100,
+    radius=math.min(width,height)/2,
+    width=width,height=height,
+    square=UsesSquareMinimap()
+  }
+end
+
 local function EntryKey(node)
   return tostring(node.questID)..":"..tostring(node.role)..":"..
     tostring(node.sourceKind)..":"..tostring(node.sourceID)..":"..
@@ -472,6 +498,7 @@ end
 -- hidden; meaningful >=0.50% item starters remain visible.
 local function MinimapNodeVisible(node,allowItemStart)
   if not node or not IsRoleEnabled(node.role) or not PvPNodeVisible(node) then return false end
+  if QuestieOcto.QuestMenu and QuestieOcto.QuestMenu:IsNodeHidden(node) then return false end
 
   if node.role=="itemStart" then
     if not allowItemStart then return false end

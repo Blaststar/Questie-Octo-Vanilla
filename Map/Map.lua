@@ -407,6 +407,7 @@ end
 
 function M:GetOrCreate(key,node,x,y,clusterCount,generation,kind)
   if not IsRoleEnabled(node.role) or not IsPvPQuestNodeEnabled(node) then return nil end
+  if QuestieOcto.QuestMenu and QuestieOcto.QuestMenu:IsNodeHidden(node) then return nil end
 
   local pin=self.frames[key]
 
@@ -853,6 +854,7 @@ end
 
 function M:RenderContinentNode(node,mapID,generation)
   if not node or not IsRoleEnabled(node.role) or not IsPvPQuestNodeEnabled(node) then return 0 end
+  if QuestieOcto.QuestMenu and QuestieOcto.QuestMenu:IsNodeHidden(node) then return 0 end
   if node.role=="itemStart" and QuestieOcto.ItemStartAreas:IsZoneWideRareChance(node.chance) then return 0 end
   -- World Map Visibility toggles apply only to continent/world overviews.
   -- Selected zone and city maps keep normal/special quest markers visible and

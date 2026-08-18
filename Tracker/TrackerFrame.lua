@@ -311,6 +311,7 @@ local function EnsureRow(index,parent)
   row=CreateFrame("Button",nil,parent)
   row:SetHeight(14)
   row:EnableMouse(true)
+  if row.RegisterForClicks then row:RegisterForClicks("LeftButtonUp","RightButtonUp") end
 
   local text=row:CreateFontString(nil,"ARTWORK","GameFontNormal")
   text:SetPoint("TOPLEFT",row,"TOPLEFT",0,0)
@@ -332,6 +333,10 @@ local function EnsureRow(index,parent)
   end)
   row:SetScript("OnClick",function()
     if not this.questID then return end
+    if arg1=="RightButton" then
+      if this.kind=="quest" and QuestieOcto.QuestMenu then QuestieOcto.QuestMenu:Open(this.questID,this) end
+      return
+    end
     if IsShiftKeyDown and IsShiftKeyDown() then
       if QuestieOcto.TrackerDriver then QuestieOcto.TrackerDriver:Toggle(this.questID) end
       return
