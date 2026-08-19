@@ -800,11 +800,33 @@ function M:Finish(generation,doPrune)
   self.syncNodeRevision=nil
   self.syncing=false
 
+  -- Re-apply the tracker-hover dim/highlight to the freshly rendered pins.
+  self:ApplyHighlight()
+
   if self.resync then
     local p=self.prune
     self.resync=false
     self.prune=false
     self:RequestSync(p)
+  end
+end
+
+function M:ApplyHighlight()
+  local hq=QuestieOcto.MapHighlight and QuestieOcto.MapHighlight.questID
+  local V=QuestieOcto.Visuals
+  if not V then return end
+  for _,pin in pairs(self.activeFrames or {}) do
+    if pin then
+      if not hq then
+        V:SetHighlight(pin,false)
+        V:SetAlpha(pin,1)
+      elseif tonumber(pin.questID)==hq and V:IsObjectiveRole(pin.role) then
+        V:SetHighlight(pin,true)
+      else
+        V:SetHighlight(pin,false)
+        V:SetAlpha(pin,0.25)
+      end
+    end
   end
 end
 

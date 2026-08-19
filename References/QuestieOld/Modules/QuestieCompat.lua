@@ -1,0 +1,300 @@
+---@diagnostic disable: undefined-global, return-type-mismatch, undefined-field
+---@class QuestieCompat
+QuestieCompat = {}
+
+local errorMsg = "Questie tried to call a blizzard API function that does not exist..."
+local INDIZES_AVAILABLE = 7
+local INDIZES_ACTIVE = 6
+
+local tinsert = table.insert
+
+local WatchFrame = QuestWatchFrame or WatchFrame
+
+------------------------------------------
+-- Older client compatibility (pre 1.14.1)
+------------------------------------------
+
+-- Add missing Seasons object, if not available (e.g. 1.14.0 and below is missing it)
+if not C_Seasons then
+    C_Seasons = {
+        ---[C_Seasons.HasActiveSeason Documentation](https://warcraft.wiki.gg/wiki/API_C_Seasons.HasActiveSeason)
+        ---Returns true if the player is on a seasonal realm.
+        HasActiveSeason = function()
+            return false
+        end,
+        ---[C_Seasons.GetActiveSeason Documentation](https://warcraft.wiki.gg/wiki/API_C_Seasons.GetActiveSeason)
+        ---Returns the ID of the season that is active on the current realm.
+        GetActiveSeason = function()
+            return 0
+        end
+    }
+end
+
+-- Specific subclass of this mixin was added in a minor version and is missing in earlier patches, functionality this makes next to no visual difference
+if not TooltipBackdropTemplateMixin then
+    TooltipBackdropTemplateMixin = BackdropTemplateMixin
+end
+
+-------------------------------------------
+-- API difference compatibility (Era/Wotlk)
+-------------------------------------------
+
+---[SetMinResize Documentation](https://warcraft.wiki.gg/wiki/API_Frame_SetMinResize)
+---[SetMaxResize Documentation](https://warcraft.wiki.gg/wiki/API_Frame_SetMaxResize)
+---[SetResizeBounds Documentation](https://warcraft.wiki.gg/wiki/API_Frame_SetMinResize)
+---Specifies the minimum [and maximum] width and height that the object can be resized to.
+---@param frame frame
+---@param minWidth number The minimum width the object can be resized to.
+---@param minHeight number The minimum height the object can be resized to.
+---@param maxWidth number The maximum width the object can be resized to.
+---@param maxHeight number The maximum height the object can be resized to.
+function QuestieCompat.SetResizeBounds(frame, minWidth, minHeight, maxWidth, maxHeight)
+    if frame.SetResizeBounds then
+        frame:SetResizeBounds(minWidth, minHeight, maxWidth, maxHeight)
+        return
+    else
+        if frame.SetMinResize and frame.SetMaxResize then
+            if minWidth and minWidth ~= 0 then
+                frame:SetMinResize(minWidth, minHeight)
+            end
+            if maxWidth and maxWidth ~= 0 then
+                frame:SetMaxResize(maxWidth, maxHeight)
+            end
+            return
+        end
+    end
+    error(errorMsg, 2)
+end
+
+---Returns the available quests at a quest giver.
+---@return GossipQuestUIInfo[]
+function QuestieCompat.GetAvailableQuests()
+    if C_GossipInfo and C_GossipInfo.GetAvailableQuests then
+        return C_GossipInfo.GetAvailableQuests()
+    elseif GetGossipAvailableQuests then
+        local info = {GetGossipAvailableQuests()}
+        local availableQuests = {}
+        for i = 1, #info, INDIZES_AVAILABLE do
+            local quest = {
+                title = info[i],
+                questLevel = info[i + 1],
+                isTrivial = info[i + 2],
+                frequency = info[i + 3],
+                repeatable = info[i + 4],
+                isLegendary = info[i + 5],
+                isIgnored = info[i + 6],
+                isImportant = false, -- Not available from GetGossipAvailableQuests
+                isMeta = false, -- Not available from GetGossipAvailableQuests
+                questID = 0, -- Not available from GetGossipAvailableQuests
+            }
+            tinsert(availableQuests, quest)
+        end
+        return availableQuests
+    end
+    error(errorMsg, 2)
+end
+
+---Returns the quests which can be turned in at a quest giver.
+---@return GossipQuestUIInfo[]
+function QuestieCompat.GetActiveQuests()
+    if C_GossipInfo and C_GossipInfo.GetActiveQuests then
+        -- QuestieDB needs to be loaded locally, otherwise it will be an empty module
+        local QuestieDB = QuestieLoader:ImportModule("QuestieDB")
+
+        local activeQuests = C_GossipInfo.GetActiveQuests()
+        for _, quest in pairs(activeQuests) do
+            quest.isComplete = quest.isComplete or QuestieDB.IsComplete(quest.questID) == 1
+        end
+        return activeQuests
+    elseif GetGossipActiveQuests then
+        local info = {GetGossipActiveQuests()}
+        local activeQuests = {}
+
+        for i = 1, #info, INDIZES_ACTIVE do
+            local quest = {
+                title = info[i],
+                questLevel = info[i + 1],
+                isTrivial = info[i + 2],
+                isComplete = info[i + 3],
+                isLegendary = info[i + 4],
+                isIgnored = info[i + 5],
+                frequency = nil, -- Not available from GetGossipActiveQuests
+                repeatable = false, -- Not available from GetGossipActiveQuests
+                isImportant = false, -- Not available from GetGossipAvailableQuests
+                isMeta = false, -- Not available from GetGossipAvailableQuests
+                questID = 0, -- Not available from GetGossipActiveQuests
+            }
+            tinsert(activeQuests, quest)
+        end
+        return activeQuests
+    end
+    error(errorMsg, 2)
+end
+
+---[Documentation](https://warcraft.wiki.gg/wiki/API_C_GossipInfo.SelectAvailableQuest)
+---Selects an available quest from the gossip window.
+---@param index number Index of the quest to select (I think questId might work here too...)
+function QuestieCompat.SelectAvailableQuest(index)
+    if C_GossipInfo and C_GossipInfo.SelectAvailableQuest then
+        local questId = C_GossipInfo.GetAvailableQuests()[index].questID
+        return C_GossipInfo.SelectAvailableQuest(questId)
+    elseif SelectGossipAvailableQuest then
+        return SelectGossipAvailableQuest(index)
+    end
+    error(errorMsg, 2)
+end
+
+---[Documentation](https://warcraft.wiki.gg/wiki/API_C_GossipInfo.SelectActiveQuest)
+---Selects an active quest from the gossip window.
+---@param index number|QuestId Index of the active quest to select, from 1 to GetNumGossipActiveQuests(); order corresponds to the order of return values from GetGossipActiveQuests().
+function QuestieCompat.SelectActiveQuest(index)
+    if C_GossipInfo and C_GossipInfo.SelectActiveQuest then
+        local questId = C_GossipInfo.GetActiveQuests()[index].questID
+        return C_GossipInfo.SelectActiveQuest(questId)
+    elseif SelectGossipActiveQuest then
+        return SelectGossipActiveQuest(index)
+    end
+    error(errorMsg, 2)
+end
+
+---[Documentation](https://warcraft.wiki.gg/wiki/API_GetContainerNumSlots)
+---Returns the total number of slots in the bag specified by the index.
+---@param bagID number the slot containing the bag, e.g. 0 for backpack, etc.
+---@return number numberOfSlots the number of slots in the specified bag, or 0 if there is no bag in the given slot.
+function QuestieCompat.GetContainerNumSlots(bagID)
+    if C_Container and C_Container.GetContainerNumSlots then
+        return C_Container.GetContainerNumSlots(bagID)
+    elseif GetContainerNumSlots then
+        return GetContainerNumSlots(bagID)
+    end
+    error(errorMsg, 2)
+end
+
+---[Documentation](https://warcraft.wiki.gg/wiki/API_GetContainerItemInfo)
+---Returns info for an item in a container slot.
+---@param bagID number BagID of the bag the item is in, e.g. 0 for your backpack.
+---@param slot number index of the slot inside the bag to look up.
+---@return number texture The icon texture (FileID) for the item in the specified bag slot.
+---@return number itemCount The number of items in the specified bag slot.
+---@return boolean locked True if the item is locked by the server, false otherwise.
+---@return number quality The Quality of the item.
+---@return boolean readable True if the item can be "read" (as in a book), false otherwise.
+---@return boolean lootable True if the item is a temporary container containing items that can be looted, false otherwise.
+---@return string itemLink The itemLink of the item in the specified bag slot.
+---@return boolean isFiltered True if the item is grayed-out during the current inventory search, false otherwise.
+---@return boolean noValue True if the item has no gold value, false otherwise.
+---@return number itemID The unique ID for the item in the specified bag slot.
+---@return boolean isBound True if the item is bound to the current character, false otherwise.
+function QuestieCompat.GetContainerItemInfo(bagID, slot)
+    if C_Container and C_Container.GetContainerItemInfo then
+        local containerInfo = C_Container.GetContainerItemInfo(bagID, slot)
+        if containerInfo then
+            return containerInfo.iconFileID,
+                containerInfo.stackCount,
+                containerInfo.isLocked,
+                containerInfo.quality,
+                containerInfo.isReadable,
+                containerInfo.hasLoot,
+                containerInfo.hyperlink,
+                containerInfo.isFiltered,
+                containerInfo.hasNoValue,
+                containerInfo.itemID,
+                containerInfo.isBound
+        else
+            return nil
+        end
+    elseif GetContainerItemInfo then
+        return GetContainerItemInfo(bagID, slot)
+    end
+    error(errorMsg, 2)
+end
+
+---[Documentation](https://warcraft.wiki.gg/wiki/API_GetItemCooldown)
+---Returns info about the cooldown state and time of an item.
+---@param itemID number The item ID.
+---@return number startTime The time when the cooldown started (as returned by GetTime()) or zero if no cooldown.
+---@return number duration The number of seconds the cooldown will last, or zero if no cooldown.
+---@return number enable 1 if the item is ready or on cooldown, 0 if the item is used, but the cooldown didn't start yet (e.g. potion in combat).
+function QuestieCompat.GetItemCooldown(itemID)
+    if C_Container and C_Container.GetItemCooldown then
+        return C_Container.GetItemCooldown(itemID)
+    else
+        return GetItemCooldown(itemID)
+    end
+end
+
+--- Returns the frame that is currently under the mouse cursor.
+function QuestieCompat.GetMouseFocus()
+    if GetMouseFoci then
+        return GetMouseFoci()[1]
+    else
+        --- Old version (still used in WotLK client)
+        return GetMouseFocus()
+    end
+end
+
+---@class CalendarTime
+---@field monthDay number
+---@field month number
+---@field year number
+---@field weekday number
+---@field hour number
+---@field minute number
+
+---[Documentation](https://warcraft.wiki.gg/wiki/API_C_DateAndTime.GetCurrentCalendarTime)
+---Returns the current date and time information.
+---@return CalendarTime
+function QuestieCompat.GetCurrentCalendarTime()
+    if C_DateAndTime and C_DateAndTime.GetCurrentCalendarTime then
+        return C_DateAndTime.GetCurrentCalendarTime()
+    elseif C_DateAndTime and C_DateAndTime.GetTodaysDate then
+        local today = C_DateAndTime.GetTodaysDate()
+        return {
+            monthDay = today.day,
+            month = today.month,
+            year = today.year,
+            weekday = today.weekDay,
+            hour = 0,
+            minute = 0,
+        }
+    end
+    error(errorMsg, 2)
+end
+
+---[Documentation](https://warcraft.wiki.gg/wiki/API_IsSpellKnown)
+---Returns whether the player (or pet) knows the given spell. 
+---@param spellID number The spell ID.
+---@return boolean isKnown True if the player knows the spell/profession spell, false otherwise
+function QuestieCompat.IsSpellKnown(spellID)
+    if C_SpellBook and C_SpellBook.IsSpellKnown then
+        return C_SpellBook.IsSpellKnown(spellID)
+    else
+        -- If there is no C_SpellBook we need to call this function instead because passive spells
+        -- would return wrong values and feed wrong data to our logic
+        return IsPlayerSpell(spellID)
+    end
+end
+
+function QuestieCompat.HideWatchFrame()
+    if Questie.IsTitanReforged then
+        -- On titan reforged realms, the WatchFrame somehow behaves differently when hidden.
+        -- details: https://github.com/Questie/Questie/issues/7497
+        WatchFrame:SetAlpha(0)
+    else
+        WatchFrame:Hide()
+    end
+end
+
+function QuestieCompat.ShowWatchFrame()
+    if Questie.IsTitanReforged then
+        -- On titan reforged realms, the WatchFrame somehow behaves differently when hidden.
+        -- details: https://github.com/Questie/Questie/issues/7497
+        WatchFrame:SetAlpha(1)
+    else
+        WatchFrame:Show()
+    end
+end
+
+function QuestieCompat.GetWatchFramePoint()
+    return WatchFrame:GetPoint()
+end

@@ -21,6 +21,7 @@ Q.eventFrame=nil
 Q.lastOffset=nil
 Q.refreshPending=false
 Q.nativeQuestColors=Q.nativeQuestColors or {}
+Q.showMapButton=Q.showMapButton or nil
 
 local function Settings()
   return QuestieOcto.MinimapSettings
@@ -166,8 +167,116 @@ local function StyleButton(button,index)
   end
 end
 
+local function SelectedQuestID()
+  if type(GetQuestLogSelection)~="function" then return nil end
+  local index=GetQuestLogSelection()
+  if not index or index<1 then return nil end
+  -- Headers and unmatched rows resolve to no quest ID, which disables the button.
+  local questID
+  if QuestieOcto.API and QuestieOcto.API.GetQuestIDForLogIndex then
+    questID=QuestieOcto.API:GetQuestIDForLogIndex(index)
+  end
+  return questID and tonumber(questID) or nil
+end
+
+local function QuestZoneMapID(questID)
+  local maps=QuestieOcto.Nodes and QuestieOcto.Nodes.questMaps and QuestieOcto.Nodes.questMaps[tonumber(questID)]
+  if not maps then return nil end
+  -- Pick the lowest zone map ID so repeated presses stay deterministic.
+  local best
+  for mapID in pairs(maps) do
+    mapID=tonumber(mapID)
+    if mapID and (not best or mapID<best) then best=mapID end
+  end
+  return best
+end
+
+local function OpenWorldMapToZone(mapID)
+  mapID=tonumber(mapID)
+  if not mapID or type(SetMapZoom)~="function" or type(GetMapZones)~="function"
+     or type(GetMapContinents)~="function" or not QuestieOcto.DatabaseAPI then
+    return false
+  end
+  -- Resolve the quest's zone map ID to a continent/zone index, mirroring the
+  -- world-map pin zone-entry lookup.
+  local continents={GetMapContinents()}
+  for continent=1,table.getn(continents) do
+    local zones={GetMapZones(continent)}
+    for index,name in ipairs(zones) do
+      if QuestieOcto.DatabaseAPI:GetMapIDByName(name)==mapID then
+        if WorldMapFrame and not WorldMapFrame:IsShown() and ShowUIPanel then ShowUIPanel(WorldMapFrame) end
+        SetMapZoom(continent,index)
+        return true
+      end
+    end
+  end
+  return false
+end
+
+function Q:EnsureShowMapButton()
+  if self.showMapButton or not QuestLogFrame or type(CreateFrame)~="function" then return end
+
+  local button=CreateFrame("Button","QuestieOctoShowMapButton",QuestLogFrame,"UIPanelButtonTemplate")
+  button:SetWidth(80)
+  button:SetHeight(22)
+  button:SetText("Show Map")
+
+  -- Match the requested placement to the left of the "Quests x/25" counter,
+  -- falling back to the frame's top-right corner if that element is absent.
+  local counter=getglobal and getglobal("QuestLogQuestCount")
+  if counter then
+    button:SetPoint("RIGHT",counter,"LEFT",-20,0)
+  else
+    button:SetPoint("TOPRIGHT",QuestLogFrame,"TOPRIGHT",-40,-40)
+  end
+
+  -- The template label renders blurry under custom UI scales; re-apply a
+  -- standard font at an integer point size so it stays crisp.
+  local fs=button.GetFontString and button:GetFontString()
+  if fs and fs.SetFont then fs:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF",12,"") end
+
+  button:SetScript("OnClick",function()
+    local questID=SelectedQuestID()
+    local mapID=questID and QuestZoneMapID(questID)
+    if mapID then OpenWorldMapToZone(mapID) end
+  end)
+
+  self.showMapButton=button
+
+  -- Questie Options button sits just left of "Show Map" and opens the same
+  -- options window the Game Menu button uses.
+  local optionsButton=CreateFrame("Button","QuestieOctoQuestLogOptionsButton",QuestLogFrame,"UIPanelButtonTemplate")
+  optionsButton:SetWidth(104)
+  optionsButton:SetHeight(22)
+  optionsButton:SetText("Questie Options")
+  optionsButton:SetPoint("RIGHT",button,"LEFT",-6,0)
+
+  local ofs=optionsButton.GetFontString and optionsButton:GetFontString()
+  if ofs and ofs.SetFont then ofs:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF",12,"") end
+
+  optionsButton:SetScript("OnClick",function()
+    if QuestieOcto.Options and QuestieOcto.Options.Show then QuestieOcto.Options:Show() end
+  end)
+
+  self.optionsButton=optionsButton
+end
+
+function Q:UpdateShowMapButton()
+  local button=self.showMapButton
+  if not button then return end
+  -- Enable only when the selected quest has a known zone to open.
+  local questID=SelectedQuestID()
+  local hasZone=questID and QuestZoneMapID(questID) and true or false
+  if hasZone then
+    if button.Enable then button:Enable() end
+  else
+    if button.Disable then button:Disable() end
+  end
+end
+
 function Q:Refresh()
   if not QuestLogFrame or not QuestLogFrame:IsShown() then return end
+  self:EnsureShowMapButton()
 
   local displayed=tonumber(QUESTS_DISPLAYED) or tonumber(QUESTLOG_QUESTS_DISPLAYED) or 6
   local offset=0
@@ -179,6 +288,8 @@ function Q:Refresh()
     local button=GetTitleButton(i)
     if button and button:IsShown() then StyleButton(button,i+offset) end
   end
+
+  self:UpdateShowMapButton()
 end
 
 function Q:ScheduleRefresh()
@@ -255,6 +366,7 @@ function Q:Start()
   self.started=true
   self:InstallHook()
   self:InstallVisibilityWatcher()
+  self:EnsureShowMapButton()
   self:ScheduleRefresh()
 end
 

@@ -237,7 +237,7 @@ function D:InstallQuestLogShiftClick()
       click=firstArg or arg1 or "LeftButton"
     end
 
-    if actualButton and not actualButton.isHeader and click=="LeftButton" and IsShiftKeyDown and IsShiftKeyDown() then
+    if actualButton and not actualButton.isHeader and click=="LeftButton" and IsControlKeyDown and IsControlKeyDown() then
       local questID,index=ResolveQuestLogButton(actualButton)
       if questID then
         D.stats.shiftClicks=D.stats.shiftClicks+1

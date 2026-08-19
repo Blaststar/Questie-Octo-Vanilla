@@ -66,6 +66,8 @@ function V:ClearPin(pin,alpha)
   alpha=tonumber(alpha) or 1
   pin.iconR,pin.iconG,pin.iconB=1,1,1
   pin.glowR,pin.glowG,pin.glowB=1,1,1
+  pin.glowShown=false
+  pin.glowForced=nil
   if pin.texture then pin.texture:SetVertexColor(1,1,1,alpha) end
   if pin.glowTexture then pin.glowTexture:Hide() end
 end
@@ -106,8 +108,37 @@ function V:ApplyPin(pin,node,isMinimap,alpha)
     pin.glowTexture:SetVertexColor(gr,gg,gb,alpha)
     self:ResizeGlow(pin)
     pin.glowTexture:Show()
+    pin.glowShown=true
   elseif pin.glowTexture then
     pin.glowTexture:Hide()
+    pin.glowShown=false
+  end
+end
+
+-- Tracker-hover highlight: brighten a pin and force its glow on so the hovered
+-- quest's objectives stand out, then restore the normal glow state on release.
+function V:SetHighlight(pin,on)
+  if not pin or not pin.texture then return end
+  if on then
+    pin.texture:SetVertexColor(pin.iconR or 1,pin.iconG or 1,pin.iconB or 1,1)
+    if pin.glowTexture then
+      local gr,gg,gb=self:GetQuestColor(pin.questID)
+      pin.glowTexture:SetVertexColor(gr,gg,gb,1)
+      self:ResizeGlow(pin)
+      pin.glowTexture:Show()
+      pin.glowForced=true
+    end
+  else
+    pin.texture:SetVertexColor(pin.iconR or 1,pin.iconG or 1,pin.iconB or 1,1)
+    if pin.glowForced and pin.glowTexture then
+      pin.glowForced=nil
+      if pin.glowShown then
+        pin.glowTexture:SetVertexColor(pin.glowR or 1,pin.glowG or 1,pin.glowB or 1,1)
+        pin.glowTexture:Show()
+      else
+        pin.glowTexture:Hide()
+      end
+    end
   end
 end
 
@@ -124,6 +155,7 @@ function V:ApplyFullNode(pin,node,isMinimap,alpha)
   pin.texture:SetTexture("Interface\\AddOns\\Questie-Octo\\UI\\Icons\\pfquest_node")
   pin.texture:SetVertexColor(r,g,b,alpha)
   if pin.glowTexture then pin.glowTexture:Hide() end
+  pin.glowShown=false
   pin.fullNode=true
   pin.fullNodeNode=node
 end

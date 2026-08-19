@@ -198,6 +198,20 @@ function T:ApplyVisibleRowsHeight()
   end
 
   local _,maxH=GetScreenBounds()
+
+  -- The tracker grows downward from a fixed top anchor, so the real ceiling is
+  -- the space from its top edge to the bottom of the screen. Using the whole
+  -- screen height let the frame run off the bottom, which made high Visible Rows
+  -- values render rows below the screen where they could never be seen.
+  if self.frame.GetTop and UIParent and UIParent.GetBottom then
+    local top=self.frame:GetTop()
+    local bottom=UIParent:GetBottom()
+    if top and bottom then
+      local available=top-bottom-6
+      if available>=self.minHeight then maxH=math.min(maxH,available) end
+    end
+  end
+
   local frameHeight=Clamp(maxPageHeight+self.frameVerticalChrome,self.minHeight,math.min(self.maxHeight,maxH))
   self.frame:SetHeight(frameHeight)
 
@@ -301,6 +315,38 @@ function T:ScrollBy(delta)
   self:LayoutVisibleRows()
 end
 
+-- Put a clickable quest hyperlink into the chat edit box so the player can send
+-- it, falling back to a direct SAY message when no chat box is available.
+local function LinkQuestToChat(questID)
+  questID=tonumber(questID)
+  if not questID then return end
+  local q=QuestieOcto.QuestModel and QuestieOcto.QuestModel:Get(questID) or nil
+  local state=QuestieOcto.QuestLog and QuestieOcto.QuestLog.active and QuestieOcto.QuestLog.active[questID] or nil
+  local name=(q and q.title) or (state and state.title) or ("Quest "..tostring(questID))
+  local level=(q and tonumber(q.level)) or (state and tonumber(state.level)) or 0
+  local link="|cffffff00|Hquest:"..tostring(questID)..":"..tostring(level).."|h["..tostring(name).."]|h|r"
+
+  local editBox=getglobal and (getglobal("ChatFrame1EditBox") or getglobal("ChatFrameEditBox")) or nil
+
+  -- If the player already has text typed, keep it and append the link
+  if editBox and editBox:IsVisible() and editBox.GetText and editBox.SetText then
+    local current=editBox:GetText() or ""
+    if current~="" then
+      editBox:SetText(current..link)
+    else
+      editBox:SetText(link)
+    end
+    if editBox.SetFocus then editBox:SetFocus() end
+    return
+  end
+
+  if ChatFrame_OpenChat then
+    ChatFrame_OpenChat(link)
+  elseif SendChatMessage then
+    SendChatMessage(link,"SAY")
+  end
+end
+
 local function EnsureRow(index,parent)
   local row=T.rows[index]
   if row then
@@ -321,14 +367,17 @@ local function EnsureRow(index,parent)
 
   row:SetScript("OnEnter",function()
     if this.questID then
+      if this.kind=="quest" and QuestieOcto.MapHighlight then QuestieOcto.MapHighlight:Set(this.questID) end
       GameTooltip:SetOwner(this,"ANCHOR_LEFT")
       GameTooltip:SetText(this.questTitle or "Quest",1,0.82,0)
       GameTooltip:AddLine("Click to open this quest in the Quest Log.",1,1,1)
-      GameTooltip:AddLine("Shift + Click to stop tracking it.",0.7,0.7,0.7)
+      GameTooltip:AddLine("Ctrl + Click to stop tracking it.",0.7,0.7,0.7)
+      GameTooltip:AddLine("Shift + Click to link it to chat.",0.7,0.7,0.7)
       GameTooltip:Show()
     end
   end)
   row:SetScript("OnLeave",function()
+    if QuestieOcto.MapHighlight then QuestieOcto.MapHighlight:Clear() end
     if GameTooltip then GameTooltip:Hide() end
   end)
   row:SetScript("OnClick",function()
@@ -337,8 +386,12 @@ local function EnsureRow(index,parent)
       if this.kind=="quest" and QuestieOcto.QuestMenu then QuestieOcto.QuestMenu:Open(this.questID,this) end
       return
     end
-    if IsShiftKeyDown and IsShiftKeyDown() then
+    if IsControlKeyDown and IsControlKeyDown() then
       if QuestieOcto.TrackerDriver then QuestieOcto.TrackerDriver:Toggle(this.questID) end
+      return
+    end
+    if IsShiftKeyDown and IsShiftKeyDown() then
+      LinkQuestToChat(this.questID)
       return
     end
     T:OpenQuest(this.questID)

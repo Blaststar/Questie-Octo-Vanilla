@@ -867,6 +867,27 @@ function MM:UpdatePositions(force)
   self.stats.positionUpdates=self.stats.positionUpdates+1
   self.stats.scannedDescriptors=table.getn(self.plan or {})+table.getn(self.itemStartPlan or {})
   self.stats.poolSize=table.getn(self.frames or {})
+
+  self:ApplyHighlight()
+end
+
+function MM:ApplyHighlight()
+  local hq=QuestieOcto.MapHighlight and QuestieOcto.MapHighlight.questID
+  local V=QuestieOcto.Visuals
+  if not V then return end
+  for _,pin in pairs(self.activeFrames or {}) do
+    if pin then
+      if not hq then
+        V:SetHighlight(pin,false)
+        V:SetAlpha(pin,1)
+      elseif tonumber(pin.questID)==hq and V:IsObjectiveRole(pin.role) then
+        V:SetHighlight(pin,true)
+      else
+        V:SetHighlight(pin,false)
+        V:SetAlpha(pin,0.25)
+      end
+    end
+  end
 end
 
 function MM:OnUpdate(elapsed)
