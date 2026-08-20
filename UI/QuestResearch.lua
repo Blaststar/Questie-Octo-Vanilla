@@ -225,6 +225,35 @@ function R:GetStatusText()
   return "Matching quests: "..self.resultCount.."."
 end
 
+-- Zone(s) the quest belongs to, derived from its quest giver's coordinates and
+-- falling back to any resolved map for giver-less (item-start) quests. 1.12 has
+-- no native zone hyperlink, so the names are shown as plain "[Zone]" text.
+local function QuestZoneNames(q,id)
+  local mapSet={}
+  local function addCoords(coords)
+    for _,c in pairs(coords or {}) do
+      if type(c)=="table" and tonumber(c[3]) then mapSet[tonumber(c[3])]=true end
+    end
+  end
+  if q and q.starts then
+    for _,cid in pairs(q.starts.creature or {}) do addCoords(QuestieOcto.DatabaseAPI:GetCreatureCoords(cid)) end
+    for _,oid in pairs(q.starts.gameObject or {}) do addCoords(QuestieOcto.DatabaseAPI:GetObjectCoords(oid)) end
+  end
+  if not next(mapSet) then
+    local qm=QuestieOcto.Nodes and QuestieOcto.Nodes.questMaps and QuestieOcto.Nodes.questMaps[tonumber(id)]
+    for mapID in pairs(qm or {}) do mapSet[tonumber(mapID)]=true end
+  end
+
+  local names={}
+  local seen={}
+  for mapID in pairs(mapSet) do
+    local name=QuestieOcto.DatabaseAPI:GetZoneName(mapID)
+    if name and not seen[name] then seen[name]=true; table.insert(names,name) end
+  end
+  table.sort(names)
+  return names
+end
+
 function R:GetQuestDetails()
   local id=self.selectedQuestID
   if not id then return "Select a quest to view its details." end
@@ -255,6 +284,13 @@ function R:GetQuestDetails()
   local it=JoinDisplayNames(q.starts and q.starts.item,function(v) return QuestieOcto.DatabaseAPI:GetItemName(v) end)
   if n then table.insert(givers,n) end; if o then table.insert(givers,o) end; if it then table.insert(givers,it) end
   if table.getn(givers)>0 then table.insert(lines,"\n|cffffd100Quest Giver|r\n"..table.concat(givers,"\n")) end
+
+  local zones=QuestZoneNames(q,id)
+  if table.getn(zones)>0 then
+    local zoneText={}
+    for i=1,table.getn(zones) do table.insert(zoneText,"|cff40a0ff["..zones[i].."]|r") end
+    table.insert(lines,"\n|cffffd100Zone|r\n"..table.concat(zoneText," "))
+  end
 
   local desc=FormatQuestText(q.descriptionText)
   if desc then table.insert(lines,"\n|cffffd100Description|r\n"..desc) end
@@ -564,16 +600,17 @@ function R:CloseWindow()
   if self.frame then self.frame:Hide() end
 end
 
-function R:GetOptionsTab()
-  return {
-    name="Quests",type="group",order=14,
-    args={
-      heading={type="header",order=1,name="Quests"},
-      description={type="description",order=2,fontSize="medium",width="full",name="Browse/search the pfQuest quest database in a dedicated lightweight window."},
-      open={type="execute",order=3,name="Open Quests",desc="Open the quest browser.",width="double",func=function() R:OpenWindow() end},
-    },
-  }
-end
+
+--function R:GetOptionsTab()
+--  return {
+--    name="Quests",type="group",order=14,
+--    args={
+--      heading={type="header",order=1,name="Quests"},
+--      description={type="description",order=2,fontSize="medium",width="full",name="Browse/search the pfQuest quest database in a dedicated lightweight window."},
+--      open={type="execute",order=3,name="Open Quests",desc="Open the quest browser.",width="double",func=function() R:OpenWindow() end},
+--    },
+--  }
+--end
 
 function R:OnStateChanged()
   if self.frame and self.frame:IsShown() then

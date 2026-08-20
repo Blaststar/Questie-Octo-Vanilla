@@ -880,7 +880,7 @@ function MM:ApplyHighlight()
       if not hq then
         V:SetHighlight(pin,false)
         V:SetAlpha(pin,1)
-      elseif tonumber(pin.questID)==hq and V:IsObjectiveRole(pin.role) then
+      elseif tonumber(pin.questID)==hq and (V:IsObjectiveRole(pin.role) or pin.role=="turnin") then
         V:SetHighlight(pin,true)
       else
         V:SetHighlight(pin,false)

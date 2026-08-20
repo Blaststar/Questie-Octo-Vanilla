@@ -498,7 +498,7 @@ local function CreateOptionsTable()
       minimap_tab=CreateMinimapTab(),
       tracker_tab=CreateTrackerTab(),
       tooltip_tab=CreateTooltipTab(),
-      quests_tab=QuestieOcto.QuestResearch:GetOptionsTab(),
+      --quests_tab=QuestieOcto.QuestResearch:GetOptionsTab(),
     },
   }
 end

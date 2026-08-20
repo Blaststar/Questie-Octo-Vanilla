@@ -55,6 +55,23 @@ local function Clamp(v,minv,maxv)
   return v
 end
 
+local function CollapsedZones()
+  local db=CharacterDB()
+  db.collapsedZones=db.collapsedZones or {}
+  return db.collapsedZones
+end
+
+function T:IsZoneCollapsed(zone)
+  return CollapsedZones()[tostring(zone)] and true or false
+end
+
+function T:ToggleZone(zone)
+  local z=CollapsedZones()
+  local key=tostring(zone)
+  z[key]=(not z[key]) or nil
+  self:Render()
+end
+
 local function GetScreenBounds()
   local width=(UIParent and UIParent.GetWidth and UIParent:GetWidth()) or 1024
   local height=(UIParent and UIParent.GetHeight and UIParent:GetHeight()) or 768
@@ -239,7 +256,11 @@ function T:GetVisibleRowRange()
     local row=self.rows[i]
     local h=(row and row.GetHeight and row:GetHeight()) or 0
     if h<=0 then h=1 end
-    if used+h>viewHeight then break end
+    -- 1px tolerance: the viewport height is set to the exact summed row heights,
+    -- but SetHeight->GetHeight can round down a fraction, which would otherwise
+    -- clip the final row that actually fits (worst on the last zone after a
+    -- collapse changes the row set).
+    if used+h>viewHeight+1 then break end
     used=used+h
     count=count+1
     last=i
@@ -365,6 +386,18 @@ local function EnsureRow(index,parent)
   text:SetJustifyV("TOP")
   row.text=text
 
+  -- Native quest-log style +/- button, shown only on zone header rows.
+  local collapse=CreateFrame("Button",nil,row)
+  collapse:SetWidth(14)
+  collapse:SetHeight(14)
+  collapse:SetPoint("LEFT",row,"LEFT",0,0)
+  local nt=collapse:CreateTexture(nil,"BACKGROUND"); nt:SetAllPoints(collapse); collapse:SetNormalTexture(nt)
+  local pt=collapse:CreateTexture(nil,"BACKGROUND"); pt:SetAllPoints(collapse); collapse:SetPushedTexture(pt)
+  local ht=collapse:CreateTexture(nil,"HIGHLIGHT"); ht:SetTexture("Interface\\Buttons\\UI-PlusButton-Hilight"); ht:SetAllPoints(collapse); collapse:SetHighlightTexture(ht)
+  collapse:SetScript("OnClick",function() if this.zoneName then T:ToggleZone(this.zoneName) end end)
+  collapse:Hide()
+  row.collapse=collapse
+
   row:SetScript("OnEnter",function()
     if this.questID then
       if this.kind=="quest" and QuestieOcto.MapHighlight then QuestieOcto.MapHighlight:Set(this.questID) end
@@ -381,6 +414,10 @@ local function EnsureRow(index,parent)
     if GameTooltip then GameTooltip:Hide() end
   end)
   row:SetScript("OnClick",function()
+    if this.kind=="zone" then
+      if this.zoneName then T:ToggleZone(this.zoneName) end
+      return
+    end
     if not this.questID then return end
     if arg1=="RightButton" then
       if this.kind=="quest" and QuestieOcto.QuestMenu then QuestieOcto.QuestMenu:Open(this.questID,this) end
@@ -415,6 +452,8 @@ function T:ClearRows()
     row.timerLogIndex=nil
     row.failed=nil
     row.textIndent=nil
+    row.zoneName=nil
+    if row.collapse then row.collapse:Hide(); row.collapse.zoneName=nil end
   end
   self.rowCount=0
   self.topRow=1
@@ -484,7 +523,7 @@ local function ApplyRowStyle(row, contentWidth, constrainWidth)
   if kind=="zone" then
     size=size+1
     r,g,b=0.88,0.69,0.24
-    left=0
+    left=16
   elseif kind=="quest" then
     -- Match the classic Questie/Quest Log presentation: completion is shown
     -- by appending "(Complete)" to the title, not by replacing difficulty color.
@@ -503,6 +542,20 @@ local function ApplyRowStyle(row, contentWidth, constrainWidth)
   elseif kind=="timer" then
     r,g,b=0.35,0.75,1
     left=18
+  end
+
+  if kind=="zone" and row.collapse then
+    row.collapse.zoneName=row.zoneName
+    local collapsed=T:IsZoneCollapsed(row.zoneName)
+    local nt=row.collapse.GetNormalTexture and row.collapse:GetNormalTexture()
+    local pt=row.collapse.GetPushedTexture and row.collapse:GetPushedTexture()
+    if nt then nt:SetTexture(collapsed and "Interface\\Buttons\\UI-PlusButton-Up" or "Interface\\Buttons\\UI-MinusButton-Up") end
+    if pt then pt:SetTexture(collapsed and "Interface\\Buttons\\UI-PlusButton-Down" or "Interface\\Buttons\\UI-MinusButton-Down") end
+    row.collapse:ClearAllPoints()
+    row.collapse:SetPoint("LEFT",row,"LEFT",0,0)
+    row.collapse:Show()
+  elseif row.collapse then
+    row.collapse:Hide()
   end
 
   row:SetWidth(math.max(1,contentWidth or 1))
@@ -703,6 +756,7 @@ function T:Render()
   local ordered=(QuestieOcto.TrackerDriver and QuestieOcto.TrackerDriver.ordered) or {}
   local sortMode=Settings():Get("trackerSort")
   local lastZone=nil
+  local collapsedZone=false
 
   for i=1,table.getn(ordered) do
     local quest=ordered[i]
@@ -710,10 +764,14 @@ function T:Render()
       local zone=quest.zoneGroup or "Other"
       if zone~=lastZone then
         if self.rowCount>0 then self:AddRow("","spacer",nil,false) end
-        self:AddRow(zone,"zone",nil,false)
+        local zoneRow=self:AddRow(zone,"zone",nil,false)
+        if zoneRow then zoneRow.zoneName=zone end
         lastZone=zone
+        collapsedZone=self:IsZoneCollapsed(zone)
       end
     end
+
+    if not collapsedZone then
 
     local prefix=""
     if quest.level and tonumber(quest.level) and tonumber(quest.level)>0 then
@@ -738,6 +796,8 @@ function T:Render()
         local objective=quest.objectives[j]
         self:AddRow(ObjectiveDisplayText(objective),"objective",nil,objective.complete)
       end
+    end
+
     end
   end
 

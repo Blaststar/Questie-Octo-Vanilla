@@ -204,7 +204,9 @@ local function OpenWorldMapToZone(mapID)
     local zones={GetMapZones(continent)}
     for index,name in ipairs(zones) do
       if QuestieOcto.DatabaseAPI:GetMapIDByName(name)==mapID then
-        if WorldMapFrame and not WorldMapFrame:IsShown() and ShowUIPanel then ShowUIPanel(WorldMapFrame) end
+        -- Show the map directly rather than via ShowUIPanel so the shared
+        -- UIPanel slot does not close the Quest Log behind it.
+        if WorldMapFrame and not WorldMapFrame:IsShown() then WorldMapFrame:Show() end
         SetMapZoom(continent,index)
         return true
       end
@@ -217,7 +219,7 @@ function Q:EnsureShowMapButton()
   if self.showMapButton or not QuestLogFrame or type(CreateFrame)~="function" then return end
 
   local button=CreateFrame("Button","QuestieOctoShowMapButton",QuestLogFrame,"UIPanelButtonTemplate")
-  button:SetWidth(80)
+  button:SetWidth(75)
   button:SetHeight(22)
   button:SetText("Show Map")
 
@@ -243,13 +245,29 @@ function Q:EnsureShowMapButton()
 
   self.showMapButton=button
 
+  -- Quest Database button sits just left of "Show Map" and opens the same
+  local qdbButton=CreateFrame("Button","QuestieOctoQuestLogOptionsButton",QuestLogFrame,"UIPanelButtonTemplate")
+  qdbButton:SetWidth(100)
+  qdbButton:SetHeight(22)
+  qdbButton:SetText("Quest Database")
+  qdbButton:SetPoint("RIGHT",button,"LEFT",-6,0)
+
+  local qfs=qdbButton.GetFontString and qdbButton:GetFontString()
+  if qfs and qfs.SetFont then qfs:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF",12,"") end
+
+  qdbButton:SetScript("OnClick",function()
+    if QuestieOcto.QuestResearch and QuestieOcto.QuestResearch.OpenWindow then QuestieOcto.QuestResearch:OpenWindow() end
+  end)
+
+  self.qdbButton=qdbButton
+
   -- Questie Options button sits just left of "Show Map" and opens the same
   -- options window the Game Menu button uses.
   local optionsButton=CreateFrame("Button","QuestieOctoQuestLogOptionsButton",QuestLogFrame,"UIPanelButtonTemplate")
   optionsButton:SetWidth(104)
   optionsButton:SetHeight(22)
   optionsButton:SetText("Questie Options")
-  optionsButton:SetPoint("RIGHT",button,"LEFT",-6,0)
+  optionsButton:SetPoint("RIGHT",qdbButton,"LEFT",-6,0)
 
   local ofs=optionsButton.GetFontString and optionsButton:GetFontString()
   if ofs and ofs.SetFont then ofs:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF",12,"") end

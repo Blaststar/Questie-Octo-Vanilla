@@ -812,15 +812,15 @@ function M:Finish(generation,doPrune)
 end
 
 function M:ApplyHighlight()
-  local hq=QuestieOcto.MapHighlight and QuestieOcto.MapHighlight.questID
   local V=QuestieOcto.Visuals
+  local hq=QuestieOcto.MapHighlight and QuestieOcto.MapHighlight.questID
   if not V then return end
   for _,pin in pairs(self.activeFrames or {}) do
     if pin then
       if not hq then
         V:SetHighlight(pin,false)
         V:SetAlpha(pin,1)
-      elseif tonumber(pin.questID)==hq and V:IsObjectiveRole(pin.role) then
+      elseif tonumber(pin.questID)==hq and (V:IsObjectiveRole(pin.role) or pin.role=="turnin") then
         V:SetHighlight(pin,true)
       else
         V:SetHighlight(pin,false)
@@ -1458,4 +1458,3 @@ if WorldMapFrame and not M.worldMapShowHooked then
     end)
   end
 end
-

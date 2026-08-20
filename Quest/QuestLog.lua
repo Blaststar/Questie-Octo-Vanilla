@@ -70,6 +70,20 @@ local function ReadObjectives(index,questID)
         if current==nil then current=parsedCurrent end
         if required==nil then required=parsedRequired end
       end
+      -- Turtle's C_QuestLog.GetQuestObjectives can omit the counter (and its
+      -- count-bearing text) for some quests; the native per-objective
+      -- leaderboard still carries "x/y", so borrow the count and text from it.
+      if (current==nil or required==nil) and GetQuestLogLeaderBoard then
+        local lbText=GetQuestLogLeaderBoard(i,index)
+        if lbText and lbText~="" then
+          local lbc,lbr=ParseObjectiveProgress(lbText)
+          if current==nil then current=lbc end
+          if required==nil then required=lbr end
+          if lbc and lbr and (not text or not string.find(text,"%d+%s*/%s*%d+")) then
+            text=lbText
+          end
+        end
+      end
       local finished=row.finished and true or false
       local objectiveID=QuestieOcto.API and QuestieOcto.API.GetQuestLogLeaderBoardID
         and QuestieOcto.API:GetQuestLogLeaderBoardID(i,index) or nil
@@ -121,7 +135,16 @@ local function ReadObjectives(index,questID)
       end
     end
 
-    return objectives,table.concat(snapshot,"\\030"),allDone,"QuestieAPI",table.concat(mapSnapshot,"\\030")
+    -- If the modern objectives API returned fewer entries than the native quest
+    -- log (some Turtle quests expose incomplete data here), discard it and
+    -- rebuild from the leaderboard below so no objective is dropped.
+    local lbCount=GetNumQuestLeaderBoards and tonumber(GetNumQuestLeaderBoards(index)) or nil
+    if not lbCount or table.getn(objectiveKeys)>=lbCount then
+      return objectives,table.concat(snapshot,"\\030"),allDone,"QuestieAPI",table.concat(mapSnapshot,"\\030")
+    end
+    objectives={}
+    snapshot={}
+    mapSnapshot={}
   end
 
   -- 1.12 compatibility fallback. The legacy leaderboard API only supplies

@@ -230,7 +230,17 @@ local function LiveObjectiveText(node)
   if state and objectiveIndex then
     for _,row in pairs(state.objectives or {}) do
       if tonumber(row.index)==objectiveIndex then
-        return row.text or row.rawText or node.objectiveText
+        local text=row.text or row.rawText or node.objectiveText or ""
+        -- When the row text is only the entity name (its live objective ID did
+        -- not resolve, so LocalizeObjectiveRows left off the counter) append the
+        -- x/y progress from the row so the tooltip still shows it.
+        local current=tonumber(row.current)
+        local required=tonumber(row.required)
+        if current and required and required>0 and not string.find(text,"%d+%s*/%s*%d+") then
+          if text~="" then text=text.." "..tostring(current).."/"..tostring(required)
+          else text=tostring(current).."/"..tostring(required) end
+        end
+        return text
       end
     end
   end
