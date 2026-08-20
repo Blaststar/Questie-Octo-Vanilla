@@ -12,7 +12,9 @@ R.query=R.query or ""
 R.statusFilter=R.statusFilter or "all"
 R.selectedQuestID=R.selectedQuestID
 R.matches=R.matches or {}
-R.maxResults=100
+R.maxResults=1000
+R.pageSize=100
+R.page=R.page or 1
 R.resultCount=R.resultCount or 0
 R.searching=R.searching or false
 R.searchGeneration=R.searchGeneration or 0
@@ -134,6 +136,7 @@ function R:RebuildResults()
   self.resultCount=0
   self.searchTruncated=false
   self.searching=false
+  self.page=1
 
   if not QuestieOcto.DatabaseAPI or not QuestieOcto.DatabaseAPI:IsReady() then self:RefreshWindow(false); return end
   if not QuestieOcto.Completion or not QuestieOcto.Completion.ready then self:RefreshWindow(false); return end
@@ -450,16 +453,56 @@ function R:RefreshDetails()
   end
 end
 
+function R:UpdatePageControls(maxPages)
+  local page=self.page or 1
+  if self.pageText then self.pageText:SetText("Page "..tostring(page).." / "..tostring(maxPages)) end
+  if self.prevButton then if page<=1 then self.prevButton:Disable() else self.prevButton:Enable() end end
+  if self.nextButton then if page>=maxPages then self.nextButton:Disable() else self.nextButton:Enable() end end
+end
+
+function R:ChangePage(delta)
+  local total=table.getn(self.matches or {})
+  local pageSize=self.pageSize or 100
+  local maxPages=math.max(1,math.ceil(total/pageSize))
+  local newPage=(self.page or 1)+(tonumber(delta) or 0)
+  if newPage<1 then newPage=1 end
+  if newPage>maxPages then newPage=maxPages end
+  if newPage~=(self.page or 1) then
+    self.page=newPage
+    -- Start each new page at the top of the list. Set the stored offset directly
+    -- so RefreshRows reads 0 even if FauxScrollFrame_SetOffset is unavailable.
+    if self.scroll then
+      self.scroll.offset=0
+      if FauxScrollFrame_SetOffset then FauxScrollFrame_SetOffset(self.scroll,0) end
+      if self.scroll.SetVerticalScroll then self.scroll:SetVerticalScroll(0) end
+    end
+    self:RefreshRows()
+  end
+end
+
 function R:RefreshRows()
   if not self.frame or not self.frame:IsShown() then return end
   if self.statusText then self.statusText:SetText(self:GetStatusText()) end
+
+  local total=table.getn(self.matches)
+  local pageSize=self.pageSize or 100
+  local maxPages=math.max(1,math.ceil(total/pageSize))
+  if (self.page or 1)>maxPages then self.page=maxPages end
+  if (self.page or 1)<1 then self.page=1 end
+
+  local pageStart=((self.page or 1)-1)*pageSize
+  local pageCount=total-pageStart
+  if pageCount<0 then pageCount=0 end
+  if pageCount>pageSize then pageCount=pageSize end
+
   local offset=0
   if self.scroll and FauxScrollFrame_GetOffset then offset=FauxScrollFrame_GetOffset(self.scroll) or 0 end
-  if self.scroll and FauxScrollFrame_Update then FauxScrollFrame_Update(self.scroll,table.getn(self.matches),self.rowCount,self.rowHeight) end
+  if self.scroll and FauxScrollFrame_Update then FauxScrollFrame_Update(self.scroll,pageCount,self.rowCount,self.rowHeight) end
 
   for i=1,self.rowCount do
     local row=self.rows[i]
-    local data=self.matches[offset+i]
+    local within=offset+i
+    local data=(within<=pageCount) and self.matches[pageStart+within] or nil
     if data then
       row.questID=data.id
       row.text:SetText(StatusColor(data.status).."["..StatusLabel(data.status).."]|r "..data.title.."  |cff777777["..data.id.."]|r")
@@ -470,6 +513,7 @@ function R:RefreshRows()
       row:Hide()
     end
   end
+  self:UpdatePageControls(maxPages)
   self:RefreshDetails()
 end
 
@@ -478,9 +522,18 @@ function R:RefreshWindow(rebuild)
   self:RefreshRows()
 end
 
-local function MakeFilterButton(parent,label,value,x)
+local FILTER_BUTTON_WIDTH=84
+
+-- Filter buttons share one width and sit next to each other so the row reads as
+-- a connected toolbar instead of scattered auto-sized buttons.
+local function MakeFilterButton(parent,label,value,anchor)
   local b=CreateFrame("Button",nil,parent,"UIPanelButtonTemplate")
-  b:SetWidth(82); b:SetHeight(22); b:SetPoint("TOPLEFT",parent,"TOPLEFT",x,-64)
+  b:SetWidth(FILTER_BUTTON_WIDTH); b:SetHeight(22)
+  if anchor then
+    b:SetPoint("LEFT",anchor,"RIGHT",2,0)
+  else
+    b:SetPoint("TOPLEFT",parent,"TOPLEFT",24,-64)
+  end
   b:SetText(label)
   b.value=value
   b:SetScript("OnClick",function() R:SetStatusFilter(this.value) end)
@@ -513,12 +566,14 @@ function R:OpenWindowNow()
   self.searchBox=search
   local searchButton=CreateFrame("Button",nil,f,"UIPanelButtonTemplate")
   searchButton:SetWidth(70); searchButton:SetHeight(22); searchButton:SetPoint("LEFT",search,"RIGHT",8,0); searchButton:SetText("Search")
+  if QuestieOcto.GameMenu and QuestieOcto.GameMenu.SetButtonWidth then QuestieOcto.GameMenu:SetButtonWidth(searchButton,24) end
   searchButton:SetScript("OnClick",function() R:SetQuery(R.searchBox:GetText() or "") end)
 
-  self.filterButtons={
-    MakeFilterButton(f,"All","all",24), MakeFilterButton(f,"Available","available",110),
-    MakeFilterButton(f,"Active","active",196), MakeFilterButton(f,"Completed","completed",282)
-  }
+  local allBtn=MakeFilterButton(f,"All","all")
+  local availBtn=MakeFilterButton(f,"Available","available",allBtn)
+  local activeBtn=MakeFilterButton(f,"Active","active",availBtn)
+  local compBtn=MakeFilterButton(f,"Completed","completed",activeBtn)
+  self.filterButtons={allBtn,availBtn,activeBtn,compBtn}
 
   local status=f:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall")
   status:SetPoint("TOPLEFT",f,"TOPLEFT",24,-94); status:SetWidth(355); status:SetJustifyH("LEFT")
@@ -540,6 +595,31 @@ function R:OpenWindowNow()
   scroll:SetPoint("TOPLEFT",listBG,"TOPLEFT",0,-6); scroll:SetPoint("BOTTOMRIGHT",listBG,"BOTTOMRIGHT",-24,6)
   scroll:SetScript("OnVerticalScroll",function() FauxScrollFrame_OnVerticalScroll(R.rowHeight,function() R:RefreshRows() end) end)
   self.scroll=scroll
+
+  -- Page navigation below the list: < Prev   Page N / M   Next >
+  local prevButton=CreateFrame("Button",nil,f)
+  prevButton:SetWidth(32); prevButton:SetHeight(32)
+  prevButton:SetPoint("TOPLEFT",listBG,"BOTTOMLEFT",4,-2)
+  prevButton:SetNormalTexture("Interface\\Buttons\\UI-SpellbookIcon-PrevPage-Up")
+  prevButton:SetPushedTexture("Interface\\Buttons\\UI-SpellbookIcon-PrevPage-Down")
+  prevButton:SetDisabledTexture("Interface\\Buttons\\UI-SpellbookIcon-PrevPage-Disabled")
+  prevButton:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight","ADD")
+  prevButton:SetScript("OnClick",function() R:ChangePage(-1) end)
+  self.prevButton=prevButton
+
+  local pageText=f:CreateFontString(nil,"OVERLAY","GameFontNormal")
+  pageText:SetPoint("CENTER",listBG,"BOTTOM",0,-18); pageText:SetText("Page 1 / 1")
+  self.pageText=pageText
+
+  local nextButton=CreateFrame("Button",nil,f)
+  nextButton:SetWidth(32); nextButton:SetHeight(32)
+  nextButton:SetPoint("TOPRIGHT",listBG,"BOTTOMRIGHT",-4,-2)
+  nextButton:SetNormalTexture("Interface\\Buttons\\UI-SpellbookIcon-NextPage-Up")
+  nextButton:SetPushedTexture("Interface\\Buttons\\UI-SpellbookIcon-NextPage-Down")
+  nextButton:SetDisabledTexture("Interface\\Buttons\\UI-SpellbookIcon-NextPage-Disabled")
+  nextButton:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight","ADD")
+  nextButton:SetScript("OnClick",function() R:ChangePage(1) end)
+  self.nextButton=nextButton
 
   local detailBG=CreateFrame("Frame",nil,f); detailBG:SetPoint("TOPLEFT",f,"TOPLEFT",395,-40); detailBG:SetWidth(380); detailBG:SetHeight(494)
   detailBG:SetBackdrop({bgFile="Interface\\Tooltips\\UI-Tooltip-Background",edgeFile="Interface\\Tooltips\\UI-Tooltip-Border",tile=true,tileSize=16,edgeSize=12,insets={left=3,right=3,top=3,bottom=3}}); detailBG:SetBackdropColor(0,0,0,0.72)

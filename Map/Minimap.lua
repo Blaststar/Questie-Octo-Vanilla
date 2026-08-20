@@ -445,6 +445,14 @@ function MM:GetOrCreate(index)
 
     pin:SetScript("OnEnter",function() QuestieOcto.Tooltips:Show(this) end)
     pin:SetScript("OnLeave",function() QuestieOcto.Tooltips:Hide(this) end)
+    if pin.RegisterForClicks then pin:RegisterForClicks("LeftButtonUp") end
+    -- Full Node objective dots re-roll their quest color on click.
+    pin:SetScript("OnClick",function()
+      if this.fullNode and QuestieOcto.Visuals then
+        local qid=this.questID or (this.fullNodeNode and this.fullNodeNode.questID)
+        if qid then QuestieOcto.Visuals:CycleQuestColor(qid) end
+      end
+    end)
 
     self.frames[index]=pin
     self.stats.created=self.stats.created+1

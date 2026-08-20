@@ -400,9 +400,15 @@ local function AttachWorldMapPinInput(pin)
   pin:RegisterForClicks("LeftButtonUp")
   pin:SetScript("OnEnter",function() QuestieOcto.Tooltips:Show(this) end)
   pin:SetScript("OnLeave",function() QuestieOcto.Tooltips:Hide(this) end)
-  -- Continent-map markers should behave as zone-entry targets instead of
-  -- swallowing the click that would otherwise select the zone underneath.
-  pin:SetScript("OnClick",function() OpenContinentZoneForPin(this) end)
+  -- Full Node objective dots re-roll their quest color on click; otherwise a
+  -- continent-map marker still behaves as a zone-entry target.
+  pin:SetScript("OnClick",function()
+    if this.fullNode and QuestieOcto.Visuals then
+      local qid=this.questID or (this.fullNodeNode and this.fullNodeNode.questID)
+      if qid then QuestieOcto.Visuals:CycleQuestColor(qid); return end
+    end
+    OpenContinentZoneForPin(this)
+  end)
 end
 
 function M:GetOrCreate(key,node,x,y,clusterCount,generation,kind)

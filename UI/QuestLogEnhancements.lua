@@ -217,13 +217,15 @@ end
 
 function Q:EnsureShowMapButton()
   if self.showMapButton or not QuestLogFrame or type(CreateFrame)~="function" then return end
+  local GM=QuestieOcto.GameMenu
 
   local button=CreateFrame("Button","QuestieOctoShowMapButton",QuestLogFrame,"UIPanelButtonTemplate")
-  button:SetWidth(75)
   button:SetHeight(22)
   button:SetText("Show Map")
 
-  -- Match the requested placement to the left of the "Quests x/25" counter,
+  GM:SetButtonWidth(button)
+
+  -- Match the requested placement to the left of the quest counter,
   -- falling back to the frame's top-right corner if that element is absent.
   local counter=getglobal and getglobal("QuestLogQuestCount")
   if counter then
@@ -247,10 +249,11 @@ function Q:EnsureShowMapButton()
 
   -- Quest Database button sits just left of "Show Map" and opens the same
   local qdbButton=CreateFrame("Button","QuestieOctoQuestLogOptionsButton",QuestLogFrame,"UIPanelButtonTemplate")
-  qdbButton:SetWidth(100)
   qdbButton:SetHeight(22)
   qdbButton:SetText("Quest Database")
   qdbButton:SetPoint("RIGHT",button,"LEFT",-6,0)
+  
+  GM:SetButtonWidth(qdbButton)
 
   local qfs=qdbButton.GetFontString and qdbButton:GetFontString()
   if qfs and qfs.SetFont then qfs:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF",12,"") end
@@ -264,10 +267,11 @@ function Q:EnsureShowMapButton()
   -- Questie Options button sits just left of "Show Map" and opens the same
   -- options window the Game Menu button uses.
   local optionsButton=CreateFrame("Button","QuestieOctoQuestLogOptionsButton",QuestLogFrame,"UIPanelButtonTemplate")
-  optionsButton:SetWidth(104)
   optionsButton:SetHeight(22)
   optionsButton:SetText("Questie Options")
   optionsButton:SetPoint("RIGHT",qdbButton,"LEFT",-6,0)
+
+  GM:SetButtonWidth(optionsButton)
 
   local ofs=optionsButton.GetFontString and optionsButton:GetFontString()
   if ofs and ofs.SetFont then ofs:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF",12,"") end

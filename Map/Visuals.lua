@@ -23,8 +23,26 @@ local function SeedColor(seed)
   return 0.45+r/2,0.45+g/2,0.45+b/2
 end
 
+V.colorRolls=V.colorRolls or {}
+
 function V:GetQuestColor(questID)
-  return SeedColor(tonumber(questID) or 0)
+  questID=tonumber(questID) or 0
+  -- Each Full Node click re-rolls the quest's color (see CycleQuestColor).
+  local roll=self.colorRolls[questID] or 0
+  return SeedColor(questID+roll*1000003)
+end
+
+-- Full Nodes: clicking a spawn dot re-rolls its quest's color so overlapping
+-- quests can be told apart, mirroring pfQuest's node click behavior.
+function V:CycleQuestColor(questID)
+  questID=tonumber(questID)
+  if not questID then return end
+  self.colorRolls[questID]=(self.colorRolls[questID] or 0)+1
+  if QuestieOcto.Map and QuestieOcto.Map.RefreshVisualSettings then
+    QuestieOcto.Map:RefreshVisualSettings()
+  elseif QuestieOcto.Minimap and QuestieOcto.Minimap.RefreshVisualSettings then
+    QuestieOcto.Minimap:RefreshVisualSettings()
+  end
 end
 
 function V:GetObjectiveColor(questID,objectiveIndex)
