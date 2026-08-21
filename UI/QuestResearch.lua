@@ -291,7 +291,7 @@ function R:GetQuestDetails()
   local zones=QuestZoneNames(q,id)
   if table.getn(zones)>0 then
     local zoneText={}
-    for i=1,table.getn(zones) do table.insert(zoneText,"|cff40a0ff["..zones[i].."]|r") end
+    for i=1,table.getn(zones) do table.insert(zoneText,"|cffd7bea5["..zones[i].."]|r") end
     table.insert(lines,"\n|cffffd100Zone|r\n"..table.concat(zoneText," "))
   end
 
@@ -557,7 +557,7 @@ function R:OpenWindowNow()
   end
 
   local title=f:CreateFontString(nil,"OVERLAY","GameFontNormalLarge")
-  title:SetPoint("TOP",f,"TOP",0,-18); title:SetText("Quests")
+  title:SetPoint("TOP",f,"TOP",0,-18); title:SetText("Quest Database")
   local close=CreateFrame("Button",nil,f,"UIPanelCloseButton"); close:SetPoint("TOPRIGHT",f,"TOPRIGHT",-5,-5); close:SetScript("OnClick",function() R:CloseWindow() end)
 
   local search=CreateFrame("EditBox",nil,f,"InputBoxTemplate")
